@@ -93,7 +93,8 @@ const cleanName = n => { // название поставщика без лиш�
   let t = String(n || '');
   for (let k = 0; k < 4; k++) t = t.replace(/\([^()]*\)/g, ' ');
   t = t.replace(/\([^)]*$/, ' ').replace(/НАРОДНАЯ\s+ЦЕНА!?/gi, ' ').replace(/\*\s*\d+(\/\d+)?(\s*шт\.?)?/gi, ' ').replace(/(^|\s)\d+([,.]\d+)?\s*["”″]?\s*[xх×]\s*\d+(?=\s|$)/gi, ' ').replace(/\s\d+\s*эффект\S*/gi, ' ').replace(/\s+НАРОД\S*$/i, '');
-  return t.replace(/\s+/g, ' ').replace(/\s+([,.!])/g, '$1').replace(/[\s,;:*-]+$/, '').trim();
+  t = t.replace(/[\s,;]*\b\d+\s*шт\.?\s*$/i, '');
+  return t.replace(/\s+/g, ' ').replace(/\s+([,.!])/g, '$1').replace(/\s+(["»”])(?=\s*$|[,.!])/g, '$1').replace(/[\s,;:*-]+$/, '').trim();
 };
 const calOf = k => (Array.isArray(k) ? k : k ? [k] : []).map(x => String(x).trim().replace('.', ',')).filter(Boolean).join('-');
 const packOf = it => { const n = parseInt(String(it.unit_count || '1').replace(/\s/g, ''), 10); return n > 0 && n < 10000 ? n : 1; }; // price_roz у поставщика за штуку, на сайте цена за упаковку
@@ -132,7 +133,7 @@ async function main() {
     const row = { it, st: stockOf(it.sklad), price: money(it.price_roz, packOf(it)), own: String(it.name || '').includes('(' + art + ')'), sn: false };
     if (rowsBy.has(art)) { dup.add(art); rowsBy.get(art).push(row) } else rowsBy.set(art, [row]);
   }
-  const better = (x, y) => (x.own !== y.own ? x.own : (x.st > 0) !== (y.st > 0) ? x.st > 0 : x.sn !== y.sn ? x.sn : (x.price && y.price ? x.price < y.price : false));
+  const better = (x, y) => ((x.st > 0) !== (y.st > 0) ? x.st > 0 : x.sn !== y.sn ? x.sn : x.own !== y.own ? x.own : (x.price && y.price ? x.price < y.price : false)); // наличие, совпадение с названием на сайте, артикул в скобках, цена
   const api = new Map(); // для новых карточек: лучшая строка артикула
   for (const [art, rs] of rowsBy) api.set(art, rs.reduce((m, r) => better(r, m) ? r : m));
   const sameName = (a, c) => { a = nz(a); c = nz(c); return !a || !c || a.includes(c) || c.includes(a); };
