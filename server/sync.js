@@ -89,7 +89,11 @@ const stockOf = v => { // "20+" -> 20; пусто, 0, «нет» -> 0
   const m = s.match(/^\d+/); if (m) return +m[0];
   return /нет|отсутств|ожида/.test(s) ? 0 : 1; // непонятный текст («много», «в наличии») = есть
 };
-const cleanName = n => { const t = String(n || '').trim(), i = t.indexOf('('); return (i >= 0 ? t.slice(0, i) : t.replace(/\s*НАРОДНАЯ ЦЕНА!?\s*$/i, '')).replace(/\s+/g, ' ').trim(); }; // название поставщика: всё с первой скобки удаляем
+const cleanName = n => { // название поставщика без всего лишнего: скобки и всё после первой скобки, «НАРОДНАЯ ЦЕНА», «*1/6», размеры «1,2"х36», «5 эффектов»
+  let t = String(n || '').trim(); const i = t.indexOf('('); if (i >= 0) t = t.slice(0, i);
+  t = t.replace(/НАРОДНАЯ\s+ЦЕНА!?/gi, ' ').replace(/\*\s*\d+(\/\d+)?(\s*шт\.?)?/gi, ' ').replace(/\s\d+([,.]\d+)?\s*["”″]?\s*[xх×]\s*\d+\b/gi, ' ').replace(/\s\d+\s*эффект\S*/gi, ' ').replace(/\s+НАРОД\S*$/i, '');
+  return t.replace(/\s+/g, ' ').replace(/[\s,;:*-]+$/, '').trim();
+};
 const calOf = k => (Array.isArray(k) ? k : k ? [k] : []).map(x => String(x).trim().replace('.', ',')).filter(Boolean).join('-');
 const packOf = it => { const n = parseInt(String(it.unit_count || '1').replace(/\s/g, ''), 10); return n > 0 && n < 10000 ? n : 1; }; // price_roz у поставщика за штуку, на сайте цена за упаковку
 const money = (v, pack) => { const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return n > 0 ? Math.round(n * (pack || 1) * MARKUP) : 0; };
@@ -145,6 +149,7 @@ async function main() {
     if (r.price === b.price) same++; else diffs.push({ sku: b.sku, name: b.name, from: b.price, to: r.price, raw: r.it.price_roz, uc: r.it.unit_count, un: r.it.unit_name, pct: (r.price - b.price) / b.price });
   }
   log('Названия берём у поставщика (всё с первой скобки удаляем). Изменится названий:', Object.keys(nmap).length, '| из них полностью другое название:', renamed.length);
+  Object.entries(nmap).filter((e, k) => k % Math.max(1, Math.floor(Object.keys(nmap).length / 25)) === 0).slice(0, 25).forEach(([k, v]) => log('  пример: ' + k + ' → ' + v));
   renamed.slice(0, 40).forEach(x => log('  ' + x.sku + ' | было: ' + x.from + ' | станет: ' + x.to));
 
   // новые карточки
