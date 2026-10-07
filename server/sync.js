@@ -97,7 +97,7 @@ const cleanName = (n, art) => { // название поставщика без 
   t = t.replace(/АКЦИЯ!*/gi, ' ').replace(/\/\s*\d+\s*шт\.?\s*\//gi, ' ').replace(/\s+\/\s*\d*\s*$/, '').replace(/\s+\/\s*$/, '');
   const a = String(art || '').trim(); if (a && t.toLowerCase().startsWith(a.toLowerCase() + ' ')) t = t.slice(a.length);
   t = t.replace(/^\s*[A-Za-z0-9-]*\d[A-Za-z0-9-]*\s+(?=[А-Яа-яЁё])/, '');
-  t = t.replace(/(["»”])(?=[А-Яа-яЁёA-Za-z])/g, '$1 ');
+  t = t.replace(/([А-Яа-яЁёA-Za-z0-9!.?,])(["»”])(?=[А-Яа-яЁёA-Za-z])/g, '$1$2 ');
   t = t.replace(/[\s,;]*\b\d+\s*шт\.?\s*$/i, '');
   return t.replace(/\s+/g, ' ').replace(/\s+([,.!])/g, '$1').replace(/\s+(["»”])(?=\s*$|[,.!])/g, '$1').replace(/[\s,;:*-]+$/, '').trim();
 };
