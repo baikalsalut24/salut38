@@ -101,6 +101,10 @@ const cleanName = (n, art) => { // название поставщика без 
   t = t.replace(/[\s,;]*\b\d+\s*шт\.?\s*$/i, '');
   return t.replace(/\s+/g, ' ').replace(/\s+([,.!])/g, '$1').replace(/\s+(["»”])(?=\s*$|[,.!])/g, '$1').replace(/[\s,;:*-]+$/, '').trim();
 };
+const finOf = it => { // «ярко выраженный финал» — берём из любого поля поставщика, в названии которого есть final/финал
+  for (const k of Object.keys(it || {})) if (/final|финал/i.test(k)) { const v = Array.isArray(it[k]) ? it[k].join(', ') : String(it[k] == null ? '' : it[k]); const t = v.replace(/\s+/g, ' ').trim().replace(/^финал\s*[:\-—]\s*/i, ''); if (t && !/^(нет|-|0|false|null)$/i.test(t)) return t.charAt(0).toUpperCase() + t.slice(1); }
+  return '';
+};
 const calOf = k => (Array.isArray(k) ? k : k ? [k] : []).map(x => String(x).trim().replace('.', ',')).filter(Boolean).join('-');
 const packOf = it => { const n = parseInt(String(it.unit_count || '1').replace(/\s/g, ''), 10); return n > 0 && n < 10000 ? n : 1; }; // price_roz у поставщика за штуку, на сайте цена за упаковку
 const money = (v, pack) => { const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return n > 0 ? Math.round(n * (pack || 1) * MARKUP) : 0; };
@@ -129,7 +133,7 @@ async function main() {
   if (list.length < 20 || (prevN && list.length < prevN * 0.5)) return fail(`подозрительно мало товаров у поставщика (${list.length}, раньше ${prevN}); сайт не изменён`, 3);
 
   const showArg = (process.argv.find(a => a.startsWith('--show=')) || '').slice(7);
-  if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, станет: cleanName(it.name, it.art), cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4 }))); return; }
+  if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, станет: cleanName(it.name, it.art), cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4, финал: finOf(it), ВСЕ_ПОЛЯ: it }))); return; }
   // у поставщика один артикул бывает у разных товаров (например, «Хоровод» НФ7040 и «Сибирское золото» БС711): строку выбираем по названию
   const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
   const rowsBy = new Map(), dup = new Set();
@@ -145,7 +149,7 @@ async function main() {
 
   const readList = f => { try { return new Set(fs.readFileSync(path.join(DATA, f), 'utf8').split(/\r?\n/).map(x => x.trim()).filter(x => x && x[0] !== '#')); } catch { return new Set(); } };
   const manualHide = new Set([...readList('hide-manual.txt'), ...readList('hide-auto.txt')]), noVideo = readList('novideo.txt'); // ручные списки: скрыть товар / не показывать видео
-  const pr = {}, hd = [], diffs = [], inBase = new Set(base.map(b => b.sku)), chosen = new Map(), nmap = {}, renamed = [];
+  const pr = {}, hd = [], diffs = [], inBase = new Set(base.map(b => b.sku)), chosen = new Map(), nmap = {}, fnmap = {}, renamed = [];
   let same = 0, noPrice = 0;
   for (const b of base) {
     const rs = (rowsBy.get(b.sku) || []).filter(r => r.st > 0);
@@ -154,6 +158,7 @@ async function main() {
     const r = rs.reduce((m, x) => better(x, m) ? x : m);
     if (!(r.price > 0)) { noPrice++; continue; }
     chosen.set(b.sku, r); pr[b.sku] = r.price;
+    const ff = finOf(r.it); if (ff) fnmap[b.sku] = ff;
     const nn = cleanName(r.it.name, r.it.art); if (nn && nn !== b.name) { nmap[b.sku] = nn; if (!r.sn) renamed.push({ sku: b.sku, from: b.name, to: nn }); }
     if (r.price === b.price) same++; else diffs.push({ sku: b.sku, name: b.name, from: b.price, to: r.price, raw: r.it.price_roz, uc: r.it.unit_count, un: r.it.unit_name, pct: (r.price - b.price) / b.price });
   }
@@ -186,7 +191,7 @@ async function main() {
         catch (e) { sk.noimg++; return; }
       }
     }
-    ad.push({ sku: c.art, name: cleanName(c.it.name, c.it.art) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img) });
+    ad.push({ sku: c.art, name: cleanName(c.it.name, c.it.art) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img), fin: finOf(c.it) });
   });
   ad.sort((a, b) => a.price - b.price);
 
@@ -218,7 +223,7 @@ async function main() {
 
   diffs.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
   log('--- ИТОГ ---');
-  log('Товаров в каталоге сайта:', base.length, '| цена та же:', same, '| цена изменится:', diffs.length, '| будут скрыты (нет у поставщика):', hd.length, '| без цены у поставщика (цена не меняется):', noPrice);
+  log('Товаров в каталоге сайта:', base.length, '| цена та же:', same, '| цена изменится:', diffs.length, '| с финалом:', Object.keys(fnmap).length, '| будут скрыты (нет у поставщика):', hd.length, '| без цены у поставщика (цена не меняется):', noPrice);
   log('Новых карточек (в наличии, есть картинка, категория известна):', ad.length || cand.length);
   log('Пропущено новых: нет в наличии', sk.stock, '| нет картинки', sk.noimg, '| неизвестная категория', sk.nocat, '| нет цены', sk.noprice);
   if (Object.keys(sk.cats).length) log('Неизвестные категории:', Object.entries(sk.cats).map(([k, v]) => k + ' ×' + v).join('; '));
@@ -227,7 +232,7 @@ async function main() {
   if (DRY) { log('Пробный прогон завершён, файл не записан.'); return; }
 
   if (!prev && hd.length > base.length * 0.5 && !process.argv.includes('--force')) return fail(`при первом запуске скрылось бы ${hd.length} из ${base.length} товаров: похоже на неполную выгрузку. Проверьте пробным прогоном (--dry); если так и должно быть, запустите с --force`, 4);
-  saveAtomic(F.feed, { t: Date.now(), apiN: list.length, im, vd, nm: nmap, pr, hd, ad });
+  saveAtomic(F.feed, { t: Date.now(), apiN: list.length, im, vd, nm: nmap, fn: fnmap, pr, hd, ad });
   saveAtomic(F.status, { ok: true, at: new Date().toISOString(), apiN: list.length, changed: diffs.length, hidden: hd.length, added: ad.length });
   try { // убираем картинки, на которые больше никто не ссылается (старые копии картинок поставщика)
     const used = new Set([...Object.values(im), ...ad.map(a => a.img)].map(u => u.split('?')[0].split('/').pop()));
