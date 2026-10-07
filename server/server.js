@@ -20,7 +20,18 @@ const F = { orders: path.join(DATA, 'orders.json'), users: path.join(DATA, 'user
 const load = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const save = (f, v) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(v)); fs.renameSync(t, f); };
 let orders = load(F.orders, {}), users = load(F.users, null), sessions = load(F.sessions, {}), promos = load(F.promos, null), carts = load(F.carts, {}), cat = load(F.catalog, {}); // cat: правки каталога {sku:{p:цена,h:1 скрыт,by,at}}
-const BASE = load(path.join(__dirname, 'catalog.json'), []); // прайс поставщика (обновляется файлом catalog.json)
+const BASE0 = load(path.join(__dirname, 'catalog.json'), []); // базовый каталог (файл catalog.json)
+// Выгрузка поставщика (САЛЮТ-1): цены, скрытые товары и новые карточки. Пишет sync.js в DATA/feed.json
+const FEEDF = path.join(DATA, 'feed.json');
+let FEED = { t: 0, pr: {}, hd: [], ad: [] }, feedM = 0, feedChk = 0, BASE = BASE0;
+function refreshFeed() {
+  const now = Date.now(); if (now - feedChk < 5000) return; feedChk = now;
+  let m = 0; try { m = fs.statSync(FEEDF).mtimeMs } catch {} if (m === feedM) return; feedM = m;
+  const f = load(FEEDF, null); if (!f || typeof f !== 'object') return;
+  FEED = { t: +f.t || 0, pr: f.pr || {}, hd: Array.isArray(f.hd) ? f.hd : [], ad: Array.isArray(f.ad) ? f.ad : [] };
+  BASE = BASE0.map(b => FEED.pr[b.sku] > 0 ? { ...b, price: FEED.pr[b.sku] } : b).concat(FEED.ad);
+}
+refreshFeed();
 
 if (!promos) { // первый запуск: единый бессрочный промокод для всех покупателей
   promos = [{ code: 'БАЙКАЛСАЛЮТ01', aliases: ['БАЙКАСАЛЮТ01'], kind: 'promo', type: 'tiers', value: null, until: '', note: 'Единый промокод для всех покупателей, бессрочный', active: true, createdAt: new Date().toISOString(), by: 'Система' }];
@@ -201,7 +212,7 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/catalog') { // сайт: что скрыто и какие цены выставлены в приложении
     if (limit('g' + ipOf(req), 120, 60e3)) return send(res, 429, {}, CORS);
     const o = {}; for (const k in cat) { const v = cat[k]; if (v.h || v.p > 0) o[k] = { ...(v.p > 0 ? { p: v.p } : {}), ...(v.h ? { h: 1 } : {}) } }
-    return send(res, 200, { o }, { ...CORS, 'cache-control': 'no-store' });
+    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad } }, { ...CORS, 'cache-control': 'no-store' });
   }
 
   if (m === 'GET' && p === '/api/users') return send(res, 200, users.map(pub)); // для экрана входа, без PIN
@@ -285,6 +296,7 @@ async function api(req, res, url) {
   }
 
   if (p === '/api/catalog') { // все товары: видимость на сайте и цена
+    refreshFeed();
     if (!isM) return send(res, 403, { error: 'Только менеджер' });
     if (m === 'GET') return send(res, 200, BASE.map(b => { const o = cat[b.sku] || {}; return { sku: b.sku, name: b.name, cats: b.cats, brand: b.brand, img: b.img, v: b.v, base: b.price, price: o.p > 0 ? o.p : b.price, custom: o.p > 0, hidden: !!o.h } }));
     if (m === 'PATCH') {

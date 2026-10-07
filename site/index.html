@@ -959,10 +959,12 @@ document.addEventListener('click',e=>{
   const a=e.target.closest('article.card[data-open]');if(a&&!e.target.closest('button,a'))openProduct(a.dataset.open)});
 /* каталог из приложения сотрудников: скрытые товары и цены, выставленные менеджером */
 (function(){if(!window.ORDER_URL)return;const ctl=new AbortController();setTimeout(()=>ctl.abort(),5000);
-  fetch(new URL('/catalog',window.ORDER_URL).href,{signal:ctl.signal,cache:'no-store'}).then(r=>r.json()).then(j=>{const ov=(j&&j.o)||{};let ch=false;
-    PRODUCTS.forEach(p=>{const o=ov[p.sku];if(o&&o.p>0&&o.p!==p.price){p.price=o.p;ch=true}});
-    for(let i=PRODUCTS.length-1;i>=0;i--){const o=ov[PRODUCTS[i].sku];if(o&&o.h){PRODUCTS.splice(i,1);ch=true}}
-    if(ch){Object.keys(CNT).forEach(k=>delete CNT[k]);PRODUCTS.forEach(p=>p.cats.forEach(c=>CNT[c]=(CNT[c]||0)+1));renderCats();renderGrid();renderCart()}}).catch(()=>{})})();
+  fetch(new URL('/catalog',window.ORDER_URL).href,{signal:ctl.signal,cache:'no-store'}).then(r=>r.json()).then(j=>{const ov=(j&&j.o)||{},fd=(j&&j.f)||{},fp=fd.pr||{},fh=new Set(fd.hd||[]);let ch=false;
+    /* выгрузка поставщика: новые карточки, цены и скрытие товаров, которых у поставщика нет в наличии */
+    (fd.ad||[]).forEach(a=>{if(a&&a.sku&&a.price>0&&Array.isArray(a.cats)&&a.img&&!BY.has(a.sku)){const i=PRODUCTS.length;a.c=PAL[i%PAL.length];a.hit=false;a._s=(a.name+' '+a.sku+' '+(a.brand||'')).toLowerCase();a.i=i;PRODUCTS.push(a);BY.set(a.sku,a);ch=true}});
+    PRODUCTS.forEach(p=>{const q=fp[p.sku];if(q>0&&q!==p.price){p.price=q;ch=true}const o=ov[p.sku];if(o&&o.p>0&&o.p!==p.price){p.price=o.p;ch=true}});
+    for(let i=PRODUCTS.length-1;i>=0;i--){const s=PRODUCTS[i].sku,o=ov[s];if(fh.has(s)||(o&&o.h)){PRODUCTS.splice(i,1);ch=true}}
+    if(ch){BFP=null;Object.keys(CNT).forEach(k=>delete CNT[k]);PRODUCTS.forEach(p=>p.cats.forEach(c=>CNT[c]=(CNT[c]||0)+1));renderCats();renderGrid();renderCart()}}).catch(()=>{})})();
 let PROMO='',PROMO_OK=false,PROMO_INFO=null,PROMO_MSG='';
 let STEP=1;
 let CARTID='',CART_T=0;
