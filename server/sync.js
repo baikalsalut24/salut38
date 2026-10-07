@@ -180,7 +180,7 @@ async function main() {
         catch (e) { sk.noimg++; return; }
       }
     }
-    ad.push({ sku: c.art, name: cleanName(c.it.name) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV });
+    ad.push({ sku: c.art, name: cleanName(c.it.name) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img) });
   });
   ad.sort((a, b) => a.price - b.price);
 
@@ -196,9 +196,13 @@ async function main() {
     try { if (stream) await download(url, file); else { const b = await get(url, { raw: true }); if (b.length < minB) throw 0; fs.writeFileSync(file, b); } return fn; } catch { md.fail++; return null; }
   };
   if (!DRY) { try { fs.mkdirSync(IMGDIR, { recursive: true }); fs.mkdirSync(VIDDIR, { recursive: true }); } catch (e) { log('нет папки для медиа:', e.message); } }
-  await pool(have, 4, async h => {
-    if (h.it.img) { const f = await fetchFile(h.it.img, IMGDIR, h.art, 'jpg', ['jpg', 'jpeg', 'png', 'webp'], 500, false); if (f) { im[h.art] = IMGURL + '/' + f + '?n=' + NORMV; md.img++; } }
+  await pool(have, 4, async h => { // видео поставщика — на наш сервер
     if (h.it.video_mp4) { const f = await fetchFile(h.it.video_mp4, VIDDIR, h.art, 'mp4', ['mp4'], 5000, true); if (f) { vd[h.art] = VIDURL + '/' + f; md.vid++; } }
+  });
+  // картинки существующих товаров — ваши прежние (из InSales), копируем на наш сервер; у товаров от поставщика (новые карточки) картинка поставщика
+  const hdSet = new Set(hd);
+  await pool(base.filter(b => !hdSet.has(b.sku) && /^https?:/i.test(b.img || '')), 4, async b => {
+    const f = await fetchFile(b.img, IMGDIR, 'is:' + b.sku, 'jpg', ['jpg', 'jpeg', 'png', 'webp'], 500, false); if (f) { im[b.sku] = IMGURL + '/' + f + '?n=' + NORMV; md.img++; }
   });
   if (!DRY) { // выравнивание картинок: одинаковый квадрат и поля (нужен python3-pil); оригиналы сохраняются в IMG_RAW_DIR
     try { const out = require('child_process').execFileSync('python3', [path.join(__dirname, 'normalize.py'), IMGDIR, RAWDIR, ...(process.argv.includes('--renormalize') ? ['--all'] : [])], { encoding: 'utf8', timeout: 20 * 60e3 }); log(out.trim().split('\n').slice(-12).join('\n')); }
@@ -219,6 +223,10 @@ async function main() {
   if (!prev && hd.length > base.length * 0.5 && !process.argv.includes('--force')) return fail(`при первом запуске скрылось бы ${hd.length} из ${base.length} товаров: похоже на неполную выгрузку. Проверьте пробным прогоном (--dry); если так и должно быть, запустите с --force`, 4);
   saveAtomic(F.feed, { t: Date.now(), apiN: list.length, im, vd, nm: nmap, pr, hd, ad });
   saveAtomic(F.status, { ok: true, at: new Date().toISOString(), apiN: list.length, changed: diffs.length, hidden: hd.length, added: ad.length });
+  try { // убираем картинки, на которые больше никто не ссылается (старые копии картинок поставщика)
+    const used = new Set([...Object.values(im), ...ad.map(a => a.img)].map(u => u.split('?')[0].split('/').pop()));
+    if (used.size > 50) for (const dir of [IMGDIR, RAWDIR]) for (const f of fs.readdirSync(dir)) if (/\.(jpe?g|png|webp)$/i.test(f) && !used.has(f)) fs.unlinkSync(path.join(dir, f));
+  } catch (e) { log('очистка старых картинок пропущена:', e.message); }
   log('Готово: данные записаны, сайт обновится сам.');
 }
 main().catch(e => fail(e.message || String(e)));
