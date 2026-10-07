@@ -297,31 +297,38 @@ async function loadPromos(){try{promos=await api('/api/promos');if(tab==='promos
 function fmtDate(d){return d?new Date(d+'T00:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}):''}
 function promoList(){
   if(!promos)return'<div class="empty">Загрузка…</div>';
-  if(!promos.length)return'<div class="empty">Промокодов пока нет. Добавьте первый ниже.</div>';
+  if(!promos.length)return'<div class="empty">Промокодов пока нет. Нажмите «+», чтобы добавить первый.</div>';
   const SL={ok:['Действует','ok'],paused:['Пауза','warn'],expired:['Истёк','warn']};
   return promos.map(p=>`<div class="pc ${p.state==='ok'?'':'paused'}"><div class="r1"><span class="cd">${esc(p.code)}</span><span class="pill ${p.kind==='card'?'card':''}">${PK[p.kind]}</span><span class="pill ${SL[p.state][1]}">${SL[p.state][0]}</span></div>
     <div class="ds">${esc(dlabel(p))}</div>
     <div class="mt">Использован: ${p.uses} · на сумму ${rub(p.sum)}${p.disc?' · скидок на '+rub(p.disc):''}${p.until?' · до '+esc(fmtDate(p.until)):''}</div>${p.note?`<div class="mt">«${esc(p.note)}»</div>`:''}
     <div class="bt"><button data-cp="${esc(p.code)}">Копировать</button><button data-tg="${esc(p.code)}">${p.active?'Поставить на паузу':'Включить'}</button><button class="d" data-rm="${esc(p.code)}">Удалить</button></div></div>`).join('')}
-function drawPromos(){const mn=$('#mn');
-  if(!$('#pl')){
-    mn.innerHTML=`<div class="ph">Промокоды</div><div id="pl"></div>
-    <div class="pf"><b>Добавить промокод или карту</b>
+function promoForm(){
+  closeSheet();const bg=document.createElement('div');bg.className='sheet-bg';document.body.appendChild(bg);
+  bg.innerHTML=`<div class="sheet"><div class="sh"><h3>Новый промокод</h3><button class="x" id="pc_x">×</button></div><div class="sb"><div class="pf" style="margin-top:0">
       <label for="pc_c">Код или номер карты</label>
       <div class="two"><input class="f" id="pc_c" placeholder="Например, САЛЮТ10" autocapitalize="characters" autocomplete="off"><button type="button" id="pc_g">Придумать</button></div>
       <label for="pc_k">Что это</label><select class="sel" id="pc_k"><option value="promo">Промокод</option><option value="card">Дисконтная карта</option></select>
       <label for="pc_t">Скидка</label><select class="sel" id="pc_t"><option value="percent">В процентах</option><option value="amount">В рублях</option><option value="tiers">По системе скидок (5–30% по сумме заказа)</option></select>
       <input class="f" id="pc_v" inputmode="numeric" placeholder="Сколько процентов, от 1 до 90">
       <label for="pc_u">Действует до (необязательно)</label><input class="f" id="pc_u" type="date">
-      <input class="f" id="pc_n" placeholder="Заметка: кому выдан, для чего (необязательно)">
-      <button class="btn" id="pc_a">Добавить</button></div>`;
-    const sync=()=>{const t=$('#pc_t').value;$('#pc_v').hidden=t==='tiers';$('#pc_v').placeholder=t==='percent'?'Сколько процентов, от 1 до 90':'Сколько рублей скидки'};
-    $('#pc_t').onchange=sync;sync();
-    mn.onclick=async e=>{const id=e.target.id,cp=e.target.closest('[data-cp]'),tg=e.target.closest('[data-tg]'),rm=e.target.closest('[data-rm]');
+      <input class="f" id="pc_n" placeholder="Заметка: кому выдан, для чего (необязательно)"></div></div>
+    <div class="acts"><button class="btn" id="pc_a">Добавить</button></div></div>`;
+  const sync=()=>{const t=$('#pc_t').value;$('#pc_v').hidden=t==='tiers';$('#pc_v').placeholder=t==='percent'?'Сколько процентов, от 1 до 90':'Сколько рублей скидки'};
+  $('#pc_t').onchange=sync;sync();
+  bg.onclick=async e=>{const id=e.target.id;
+    if(e.target===bg||id==='pc_x')return closeSheet();
+    try{
+      if(id==='pc_g'){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let c='';for(let i=0;i<6;i++)c+=A[Math.floor(Math.random()*A.length)];$('#pc_c').value=c}
+      else if(id==='pc_a'){await api('/api/promos',{method:'POST',body:{code:$('#pc_c').value,kind:$('#pc_k').value,type:$('#pc_t').value,value:$('#pc_v').value,until:$('#pc_u').value,note:$('#pc_n').value}});
+        closeSheet();toast('Добавлено',false,true);await loadPromos()}
+    }catch(er){toast(er.error,true)}}}
+function drawPromos(){const mn=$('#mn');
+  if(!$('#pl')){
+    mn.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div class="ph">Промокоды</div><button id="pc_plus" aria-label="Добавить промокод" style="width:46px;height:46px;border-radius:50%;background:var(--y);color:#111;font-size:30px;font-weight:700;line-height:46px;text-align:center;box-shadow:0 3px 10px rgba(16,22,42,.2);flex:none">+</button></div><div id="pl"></div>`;
+    mn.onclick=async e=>{const cp=e.target.closest('[data-cp]'),tg=e.target.closest('[data-tg]'),rm=e.target.closest('[data-rm]');
       try{
-        if(id==='pc_g'){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let c='';for(let i=0;i<6;i++)c+=A[Math.floor(Math.random()*A.length)];$('#pc_c').value=c}
-        else if(id==='pc_a'){await api('/api/promos',{method:'POST',body:{code:$('#pc_c').value,kind:$('#pc_k').value,type:$('#pc_t').value,value:$('#pc_v').value,until:$('#pc_u').value,note:$('#pc_n').value}});
-          ['pc_c','pc_v','pc_u','pc_n'].forEach(i=>$('#'+i).value='');toast('Добавлено',false,true);await loadPromos()}
+        if(e.target.closest('#pc_plus'))promoForm();
         else if(cp){try{await navigator.clipboard.writeText(cp.dataset.cp);toast('Скопировано: '+cp.dataset.cp,false,true)}catch{toast('Не удалось скопировать',true)}}
         else if(tg){const p=promos.find(x=>x.code===tg.dataset.tg);await api('/api/promos',{method:'PATCH',body:{code:p.code,active:!p.active}});await loadPromos()}
         else if(rm){if(confirm('Удалить код '+rm.dataset.rm+'? У старых заказов он останется в тексте.')){await api('/api/promos',{method:'DELETE',body:{code:rm.dataset.rm}});await loadPromos()}}
