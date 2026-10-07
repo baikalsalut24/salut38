@@ -143,11 +143,13 @@ async function main() {
   for (const [art, rs] of rowsBy) api.set(art, rs.reduce((m, r) => better(r, m) ? r : m));
   const sameName = (a, c) => { a = nz(a); c = nz(c); return !a || !c || a.includes(c) || c.includes(a); };
 
+  const readList = f => { try { return new Set(fs.readFileSync(path.join(DATA, f), 'utf8').split(/\r?\n/).map(x => x.trim()).filter(x => x && x[0] !== '#')); } catch { return new Set(); } };
+  const manualHide = readList('hide-manual.txt'), noVideo = readList('novideo.txt'); // ручные списки: скрыть товар / не показывать видео
   const pr = {}, hd = [], diffs = [], inBase = new Set(base.map(b => b.sku)), chosen = new Map(), nmap = {}, renamed = [];
   let same = 0, noPrice = 0;
   for (const b of base) {
     const rs = (rowsBy.get(b.sku) || []).filter(r => r.st > 0);
-    if (!rs.length) { hd.push(b.sku); continue; }
+    if (!rs.length || manualHide.has(b.sku)) { hd.push(b.sku); continue; }
     rs.forEach(r => { r.sn = sameName(b.name, r.it.name) });
     const r = rs.reduce((m, x) => better(x, m) ? x : m);
     if (!(r.price > 0)) { noPrice++; continue; }
@@ -162,7 +164,7 @@ async function main() {
   // новые карточки
   const sk = { stock: 0, noimg: 0, nocat: 0, noprice: 0, cats: {} }, cand = [];
   for (const [art, r] of api) {
-    if (inBase.has(art)) continue;
+    if (inBase.has(art) || manualHide.has(art)) continue;
     const it = r.it;
     if (r.st <= 0) { sk.stock++; continue; }
     if (!it.img) { sk.noimg++; continue; }
@@ -201,7 +203,7 @@ async function main() {
   };
   if (!DRY) { try { fs.mkdirSync(IMGDIR, { recursive: true }); fs.mkdirSync(VIDDIR, { recursive: true }); } catch (e) { log('нет папки для медиа:', e.message); } }
   await pool(have, 4, async h => { // видео поставщика — на наш сервер
-    if (h.it.video_mp4) { const f = await fetchFile(h.it.video_mp4, VIDDIR, h.art, 'mp4', ['mp4'], 5000, true); if (f) { vd[h.art] = VIDURL + '/' + f; md.vid++; } }
+    if (h.it.video_mp4 && !noVideo.has(h.art)) { const f = await fetchFile(h.it.video_mp4, VIDDIR, h.art, 'mp4', ['mp4'], 5000, true); if (f) { vd[h.art] = VIDURL + '/' + f; md.vid++; } }
   });
   // картинки существующих товаров — ваши прежние (из InSales), копируем на наш сервер; у товаров от поставщика (новые карточки) картинка поставщика
   const hdSet = new Set(hd);
