@@ -117,6 +117,8 @@ async function main() {
   const prevN = prev && prev.apiN || 0;
   if (list.length < 20 || (prevN && list.length < prevN * 0.5)) return fail(`подозрительно мало товаров у поставщика (${list.length}, раньше ${prevN}); сайт не изменён`, 3);
 
+  const showArg = (process.argv.find(a => a.startsWith('--show=')) || '').slice(7);
+  if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4 }))); return; }
   const api = new Map(), dup = new Set();
   for (const it of list) {
     const art = String(it.art || '').trim(); if (!art) continue;
@@ -133,6 +135,13 @@ async function main() {
     pr[b.sku] = r.price;
     if (r.price === b.price) same++; else diffs.push({ sku: b.sku, name: b.name, from: b.price, to: r.price, raw: r.it.price_roz, uc: r.it.unit_count, un: r.it.unit_name, pct: (r.price - b.price) / b.price });
   }
+
+  // контроль: название на сайте и у поставщика должны совпадать (иначе картинка/цена могут быть чужими)
+  const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
+  const nm = [];
+  for (const b of base) { const r = api.get(b.sku); if (!r || r.st <= 0) continue; const a = nz(b.name), c = nz(r.it.name); if (a && c && !a.includes(c) && !c.includes(a)) nm.push({ sku: b.sku, site: b.name, sup: r.it.name }); }
+  log('Названия на сайте и у поставщика не совпадают:', nm.length, 'из', base.length - hd.length);
+  nm.slice(0, 12).forEach(x => log('  ' + x.sku + ' | сайт: ' + x.site + ' | поставщик: ' + String(x.sup).slice(0, 50)));
 
   // новые карточки
   const sk = { stock: 0, noimg: 0, nocat: 0, noprice: 0, cats: {} }, cand = [];
