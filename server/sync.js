@@ -144,7 +144,7 @@ async function main() {
   const sameName = (a, c) => { a = nz(a); c = nz(c); return !a || !c || a.includes(c) || c.includes(a); };
 
   const readList = f => { try { return new Set(fs.readFileSync(path.join(DATA, f), 'utf8').split(/\r?\n/).map(x => x.trim()).filter(x => x && x[0] !== '#')); } catch { return new Set(); } };
-  const manualHide = readList('hide-manual.txt'), noVideo = readList('novideo.txt'); // ручные списки: скрыть товар / не показывать видео
+  const manualHide = new Set([...readList('hide-manual.txt'), ...readList('hide-auto.txt')]), noVideo = readList('novideo.txt'); // ручные списки: скрыть товар / не показывать видео
   const pr = {}, hd = [], diffs = [], inBase = new Set(base.map(b => b.sku)), chosen = new Map(), nmap = {}, renamed = [];
   let same = 0, noPrice = 0;
   for (const b of base) {
