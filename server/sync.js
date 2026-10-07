@@ -201,7 +201,7 @@ async function main() {
     if (h.it.video_mp4) { const f = await fetchFile(h.it.video_mp4, VIDDIR, h.art, 'mp4', ['mp4'], 5000, true); if (f) { vd[h.art] = VIDURL + '/' + f; md.vid++; } }
   });
   if (!DRY) { // выравнивание картинок: одинаковый квадрат и поля (нужен python3-pil); оригиналы сохраняются в IMG_RAW_DIR
-    try { const out = require('child_process').execFileSync('python3', [path.join(__dirname, 'normalize.py'), IMGDIR, RAWDIR, ...(process.argv.includes('--renormalize') ? ['--all'] : [])], { encoding: 'utf8', timeout: 20 * 60e3 }); log(out.trim().split('\n').slice(-3).join(' | ')); }
+    try { const out = require('child_process').execFileSync('python3', [path.join(__dirname, 'normalize.py'), IMGDIR, RAWDIR, ...(process.argv.includes('--renormalize') ? ['--all'] : [])], { encoding: 'utf8', timeout: 20 * 60e3 }); log(out.trim().split('\n').slice(-12).join('\n')); }
     catch (e) { log('выравнивание картинок пропущено:', String(e.message).split('\n')[0]); }
   }
   log('Свои копии на сервере: картинок', md.img, '| видео', md.vid, '| ошибок скачивания', md.fail);
