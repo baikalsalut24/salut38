@@ -89,10 +89,11 @@ const stockOf = v => { // "20+" -> 20; пусто, 0, «нет» -> 0
   const m = s.match(/^\d+/); if (m) return +m[0];
   return /нет|отсутств|ожида/.test(s) ? 0 : 1; // непонятный текст («много», «в наличии») = есть
 };
-const cleanName = n => { // название поставщика без всего лишнего: скобки и всё после первой скобки, «НАРОДНАЯ ЦЕНА», «*1/6», размеры «1,2"х36», «5 эффектов»
-  let t = String(n || '').trim(); const i = t.indexOf('('); if (i >= 0) t = t.slice(0, i);
-  t = t.replace(/НАРОДНАЯ\s+ЦЕНА!?/gi, ' ').replace(/\*\s*\d+(\/\d+)?(\s*шт\.?)?/gi, ' ').replace(/\s\d+([,.]\d+)?\s*["”″]?\s*[xх×]\s*\d+\b/gi, ' ').replace(/\s\d+\s*эффект\S*/gi, ' ').replace(/\s+НАРОД\S*$/i, '');
-  return t.replace(/\s+/g, ' ').replace(/[\s,;:*-]+$/, '').trim();
+const cleanName = n => { // название поставщика без лишнего: скобки с содержимым, «НАРОДНАЯ ЦЕНА», «*1/6», размеры «1,2"х36», «5 эффектов»
+  let t = String(n || '');
+  for (let k = 0; k < 4; k++) t = t.replace(/\([^()]*\)/g, ' ');
+  t = t.replace(/\([^)]*$/, ' ').replace(/НАРОДНАЯ\s+ЦЕНА!?/gi, ' ').replace(/\*\s*\d+(\/\d+)?(\s*шт\.?)?/gi, ' ').replace(/(^|\s)\d+([,.]\d+)?\s*["”″]?\s*[xх×]\s*\d+(?=\s|$)/gi, ' ').replace(/\s\d+\s*эффект\S*/gi, ' ').replace(/\s+НАРОД\S*$/i, '');
+  return t.replace(/\s+/g, ' ').replace(/\s+([,.!])/g, '$1').replace(/[\s,;:*-]+$/, '').trim();
 };
 const calOf = k => (Array.isArray(k) ? k : k ? [k] : []).map(x => String(x).trim().replace('.', ',')).filter(Boolean).join('-');
 const packOf = it => { const n = parseInt(String(it.unit_count || '1').replace(/\s/g, ''), 10); return n > 0 && n < 10000 ? n : 1; }; // price_roz у поставщика за штуку, на сайте цена за упаковку
@@ -122,7 +123,7 @@ async function main() {
   if (list.length < 20 || (prevN && list.length < prevN * 0.5)) return fail(`подозрительно мало товаров у поставщика (${list.length}, раньше ${prevN}); сайт не изменён`, 3);
 
   const showArg = (process.argv.find(a => a.startsWith('--show=')) || '').slice(7);
-  if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4 }))); return; }
+  if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, станет: cleanName(it.name), cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4 }))); return; }
   // у поставщика один артикул бывает у разных товаров (например, «Хоровод» НФ7040 и «Сибирское золото» БС711): строку выбираем по названию
   const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
   const rowsBy = new Map(), dup = new Set();
