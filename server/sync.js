@@ -135,6 +135,15 @@ async function main() {
   if (list.length < 20 || (prevN && list.length < prevN * 0.5)) return fail(`подозрительно мало товаров у поставщика (${list.length}, раньше ${prevN}); сайт не изменён`, 3);
 
   const showArg = (process.argv.find(a => a.startsWith('--show=')) || '').slice(7);
+  if (process.argv.includes('--finale')) { // как у поставщика обозначен финал: ищем по всем товарам слова «финал/заключитель/завершающ» в описании и в названиях полей
+    const keys = {}; list.forEach(it => Object.keys(it).forEach(k => keys[k] = (keys[k] || 0) + 1)); log('ПОЛЯ у товаров:', JSON.stringify(keys));
+    const re = /финал|заключит|завершающ|кульминац|залп-финал/i, hit = list.filter(it => re.test(JSON.stringify(it.about || '')));
+    log('Товаров, где в описании есть слово про финал:', hit.length, 'из', list.length);
+    hit.slice(0, 12).forEach(it => log('  ' + it.art + ' | ' + String(it.name).slice(0, 40) + ' | about: ' + String(it.about).replace(/\r?\n/g, ' ¶ ').slice(0, 400)));
+    const no = list.filter(it => it.about && !re.test(it.about) && /Батареи/.test(it.category_name)).slice(0, 3);
+    no.forEach(it => log('  БЕЗ СЛОВА «финал»: ' + it.art + ' | about: ' + String(it.about).replace(/\r?\n/g, ' ¶ ').slice(0, 300)));
+    return;
+  }
   if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, станет: cleanName(it.name, it.art), cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4, финал: finOf(it), ВСЕ_ПОЛЯ: it }))); return; }
   // у поставщика один артикул бывает у разных товаров (например, «Хоровод» НФ7040 и «Сибирское золото» БС711): строку выбираем по названию
   const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
