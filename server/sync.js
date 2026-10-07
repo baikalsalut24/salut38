@@ -130,7 +130,7 @@ async function main() {
     if (!r || r.st <= 0) { hd.push(b.sku); continue; }
     if (!(r.price > 0)) { noPrice++; continue; }
     pr[b.sku] = r.price;
-    if (r.price === b.price) same++; else diffs.push({ sku: b.sku, name: b.name, from: b.price, to: r.price, pct: (r.price - b.price) / b.price });
+    if (r.price === b.price) same++; else diffs.push({ sku: b.sku, name: b.name, from: b.price, to: r.price, raw: r.it.price_roz, uc: r.it.unit_count, un: r.it.unit_name, pct: (r.price - b.price) / b.price });
   }
 
   // новые карточки
@@ -187,7 +187,7 @@ async function main() {
   log('Пропущено новых: нет в наличии', sk.stock, '| нет картинки', sk.noimg, '| неизвестная категория', sk.nocat, '| нет цены', sk.noprice);
   if (Object.keys(sk.cats).length) log('Неизвестные категории:', Object.entries(sk.cats).map(([k, v]) => k + ' ×' + v).join('; '));
   if (dup.size) log('Повторяющихся артикулов у поставщика:', dup.size, '(берётся позиция в наличии с меньшей ценой)');
-  if (diffs.length) { log('Самые большие изменения цены:'); diffs.slice(0, 12).forEach(d => log('  ' + d.sku, '|', d.name.slice(0, 32), '|', d.from, '->', d.to, '(' + (d.pct > 0 ? '+' : '') + Math.round(d.pct * 100) + '%)')); }
+  if (diffs.length) { log('Самые большие изменения цены:'); diffs.slice(0, 12).forEach(d => log('  ' + d.sku, '|', d.name.slice(0, 32), '|', d.from, '->', d.to, '(' + (d.pct > 0 ? '+' : '') + Math.round(d.pct * 100) + '%)', '| поставщик: price_roz=' + d.raw + ', в упаковке ' + d.uc + ' ' + d.un)); }
   if (DRY) { log('Пробный прогон завершён, файл не записан.'); return; }
 
   if (!prev && hd.length > base.length * 0.5 && !process.argv.includes('--force')) return fail(`при первом запуске скрылось бы ${hd.length} из ${base.length} товаров: похоже на неполную выгрузку. Проверьте пробным прогоном (--dry); если так и должно быть, запустите с --force`, 4);
