@@ -19,7 +19,7 @@ DATA_DIR=/var/lib/bs-data /usr/bin/python3 /opt/bs/wm-check.py
 exit 0
 R
 chmod +x /opt/bs/run-sync.sh
-(python3 -c "import cv2" 2>/dev/null && command -v tesseract >/dev/null) || apt-get install -y -qq python3-opencv python3-numpy ffmpeg tesseract-ocr
+(python3 -c "import cv2" 2>/dev/null && command -v tesseract >/dev/null && tesseract --list-langs 2>&1 | grep -q rus) || apt-get install -y -qq python3-opencv python3-numpy ffmpeg tesseract-ocr tesseract-ocr-rus
 mkdir -p /opt/bs/wm-templates; cp -r "$SRC"/server/wm-templates/. /opt/bs/wm-templates/ 2>/dev/null
 cat > /etc/systemd/system/bs-sync.service <<'U'
 [Unit]

@@ -17,14 +17,15 @@ except Exception: cache = {}
 sig = '|'.join(sorted('%s:%d' % (n, t.size) for n, t in tpls) + [str(T)])
 if cache.get('_sig') != sig: cache = {'_sig': sig}
 
-WM_RE = re.compile(r"s\s*[a4]\s*l\s*[uv]\s*t\s*[-—–_.=]?\s*[1lI|!]", re.I)  # адрес сайта поставщика: salut-1
+LANG = 'eng+rus' if 'rus' in subprocess.run(['tesseract', '--list-langs'], capture_output=True, text=True).stdout else 'eng'
+WM_RE = re.compile(r"s\s*[a4]\s*l\s*[uv]\s*t\s*[-—–_.=]?\s*[1lI|!]|центр\s+пиротехник", re.I)  # адрес сайта поставщика: salut-1
 def ocr_hit(g):  # водяной знак — текст salut-1(.ru/.com): ищем распознаванием текста на нескольких вариантах кадра
     cl = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8)).apply(g)
     for v in (g, cl, 255 - cl, cv2.resize(cl, None, fx=1.6, fy=1.6, interpolation=cv2.INTER_CUBIC)):
         tmp = tempfile.mktemp(suffix='.png'); cv2.imwrite(tmp, v)
         try:
             for psm in ('11', '6'):
-                out = subprocess.run(['tesseract', tmp, 'stdout', '--psm', psm, '-l', 'eng'], capture_output=True, text=True, timeout=60).stdout
+                out = subprocess.run(['tesseract', tmp, 'stdout', '--psm', psm, '-l', LANG], capture_output=True, text=True, timeout=60).stdout
                 if WM_RE.search(out): return True
         except Exception: pass
         finally:
@@ -34,7 +35,7 @@ def score(g):  # g — серый кадр шириной 800
     if ocr_hit(g): return 1.0
     best = 0.0
     for _, t in tpls:
-        for sc in (0.6, 0.8, 1.0, 1.25, 1.5):
+        for sc in (0.45, 0.55, 0.65, 0.75, 0.85, 1.0, 1.2, 1.5):
             tt = cv2.resize(t, None, fx=sc, fy=sc, interpolation=cv2.INTER_AREA if sc < 1 else cv2.INTER_CUBIC)
             if tt.shape[0] >= g.shape[0] or tt.shape[1] >= g.shape[1] or tt.std() < 3: continue
             best = max(best, float(cv2.matchTemplate(g, tt, cv2.TM_CCOEFF_NORMED).max()))
