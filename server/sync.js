@@ -101,9 +101,11 @@ const cleanName = (n, art) => { // название поставщика без 
   t = t.replace(/[\s,;]*\b\d+\s*шт\.?\s*$/i, '');
   return t.replace(/\s+/g, ' ').replace(/\s+([,.!])/g, '$1').replace(/\s+(["»”])(?=\s*$|[,.!])/g, '$1').replace(/[\s,;:*-]+$/, '').trim();
 };
-const finOf = it => { // «ярко выраженный финал» — берём из любого поля поставщика, в названии которого есть final/финал
-  for (const k of Object.keys(it || {})) if (/final|финал/i.test(k)) { const v = Array.isArray(it[k]) ? it[k].join(', ') : String(it[k] == null ? '' : it[k]); const t = v.replace(/\s+/g, ' ').trim().replace(/^финал\s*[:\-—]\s*/i, ''); if (t && !/^(нет|-|0|false|null)$/i.test(t)) return t.charAt(0).toUpperCase() + t.slice(1); }
-  return '';
+const finOf = it => { // финал: из поля «about» (описание эффектов) берём строку, где упомянут «финал»; если у поставщика есть отдельное поле с final/финал в названии — оно в приоритете
+  const tidy = t => { t = String(t || '').replace(/^\s*\d+\s*[.)]\s*/, '').replace(/\s+/g, ' ').trim(); const m = t.match(/финал\w*\s*[:\-—–]\s*(.+)$/i); if (m && m[1].length > 3) t = m[1]; t = t.replace(/[\s.;,]+$/, ''); if (t.length > 140) t = t.slice(0, 137).replace(/\s+\S*$/, '') + '…'; return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; };
+  for (const k of Object.keys(it || {})) if (/final|финал/i.test(k)) { const v = Array.isArray(it[k]) ? it[k].join(', ') : String(it[k] == null ? '' : it[k]); const t = tidy(v); if (t && !/^(нет|-|0|false|null)$/i.test(t)) return t; }
+  const lines = String(it && it.about || '').split(/\r?\n|(?<=[.!?])\s+(?=[А-ЯЁA-Z\d])/);
+  const l = lines.find(x => /финал/i.test(x)); return l ? tidy(l) : '';
 };
 const calOf = k => (Array.isArray(k) ? k : k ? [k] : []).map(x => String(x).trim().replace('.', ',')).filter(Boolean).join('-');
 const packOf = it => { const n = parseInt(String(it.unit_count || '1').replace(/\s/g, ''), 10); return n > 0 && n < 10000 ? n : 1; }; // price_roz у поставщика за штуку, на сайте цена за упаковку
