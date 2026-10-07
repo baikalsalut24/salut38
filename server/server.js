@@ -116,22 +116,9 @@ const TG = process.env.TG_TOKEN || '', TG_BOT = process.env.TG_BOT || '', TG_API
 const MAX_BOT = process.env.MAX_BOT || '';
 const NOTE = { new: 'принят', confirmed: 'принят в работу', picking: 'передан на сборку', packed: 'собран и скоро поедет к вам', shipping: 'передан курьеру, он уже в пути', delivered: 'отгружен. Спасибо, что выбрали «Байкал Салют»!', failed: 'не удалось доставить, менеджер свяжется с вами', cancelled: 'отменён' };
 const tgSend = (chat, text) => TG && chat ? fetch(TG_API + '/bot' + TG + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) }).catch(e => console.error('tg', e.message)) : null;
-function notifyOrder(o, text) { const n = o.notify; if (!n || !n.chatId) return; if (n.channel === 'telegram') tgSend(n.chatId, text) }
+let BOT = null;
+function notifyOrder(o, text) { const n = o.notify; if (!n || !n.chatId || !BOT) return; if (n.channel === 'telegram' || n.channel === 'max') BOT.send(n.channel, n.chatId, text) }
 const statusText = o => 'Заказ № ' + o.id + ': ' + (NOTE[o.status] || o.status) + (o.status === 'shipping' && o.deliveryInterval ? '. Доставка: ' + o.deliveryInterval : '').replace(/([^.!])$/, '$1.');
-async function tgPoll() { // привязка клиента к заказу: он нажимает ссылку t.me/бот?start=ключ
-  let off = 0;
-  for (;;) {
-    try {
-      const r = await (await fetch(TG_API + '/bot' + TG + '/getUpdates?timeout=25&offset=' + off)).json();
-      for (const u of r.result || []) {
-        off = u.update_id + 1; const m = u.message; if (!m || !m.text) continue;
-        const key = (m.text.match(/^\/start\s+(\S+)/) || [])[1], o = key && Object.values(orders).find(x => x.notify && x.notify.token === key);
-        if (o) { o.notify.chatId = String(m.chat.id); o.notify.linked = true; persist(); tgSend(o.notify.chatId, 'Готово! Будем сообщать о статусе заказа здесь.\n' + statusText(o)) }
-        else tgSend(m.chat.id, 'Здравствуйте! Чтобы получать статус заказа, откройте ссылку из подтверждения заказа на сайте.');
-      }
-    } catch (e) { await new Promise(r => setTimeout(r, 5000)) }
-  }
-}
 const priceOf = (sku, p) => { const o = cat[sku]; return o && o.p > 0 ? o.p : p }; // цена, выставленная менеджером, главнее цены с сайта
 const digits = s => String(s || '').replace(/\D/g, '').replace(/^8(?=\d{10}$)/, '7');
 for (const k in carts) if (Date.now() - Date.parse(carts[k].updatedAt) > 30 * 864e5) delete carts[k]; // брошенные корзины старше 30 дней убираем
@@ -398,4 +385,4 @@ http.createServer(async (req, res) => {
     }
     stat(req, res, url);
   } catch (e) { console.error(e); if (!res.headersSent) send(res, 500, { error: 'server' }) }
-}).listen(PORT, () => { console.log('Байкал Салют: сервер заказов на порту ' + PORT); if (TG) { tgPoll(); console.log('Telegram-бот подключён') } });
+}).listen(PORT, () => { console.log('Байкал Салют: сервер заказов на порту ' + PORT); BOT = require('./cardbot')({ promos: () => promos, savePromos: () => save(F.promos, promos), orders: () => orders, persist, statusText, irkToday }); BOT.start() });
