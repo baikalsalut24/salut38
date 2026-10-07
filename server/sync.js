@@ -91,7 +91,8 @@ const stockOf = v => { // "20+" -> 20; пусто, 0, «нет» -> 0
 };
 const cleanName = n => String(n || '').replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim(); // скобки и всё в них убираем
 const calOf = k => (Array.isArray(k) ? k : k ? [k] : []).map(x => String(x).trim().replace('.', ',')).filter(Boolean).join('-');
-const money = v => { const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return n > 0 ? Math.round(n * MARKUP) : 0; };
+const packOf = it => { const n = parseInt(String(it.unit_count || '1').replace(/\s/g, ''), 10); return n > 0 && n < 10000 ? n : 1; }; // price_roz у поставщика за штуку, на сайте цена за упаковку
+const money = (v, pack) => { const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return n > 0 ? Math.round(n * (pack || 1) * MARKUP) : 0; };
 
 async function pool(items, n, fn) { let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; await fn(items[k], k); } })); }
 
@@ -119,7 +120,7 @@ async function main() {
   const api = new Map(), dup = new Set();
   for (const it of list) {
     const art = String(it.art || '').trim(); if (!art) continue;
-    const row = { it, st: stockOf(it.sklad), price: money(it.price_roz) };
+    const row = { it, st: stockOf(it.sklad), price: money(it.price_roz, packOf(it)) };
     if (api.has(art)) { dup.add(art); const o = api.get(art); if ((row.st > 0 && o.st === 0) || (row.st > 0 && o.st > 0 && row.price && row.price < o.price)) api.set(art, row); } else api.set(art, row);
   }
 
