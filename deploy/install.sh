@@ -11,7 +11,7 @@ SRC="$(cd "$(dirname "$0")/.." && pwd)"
 export DEBIAN_FRONTEND=noninteractive
 echo "== пакеты =="
 apt-get update -y
-apt-get install -y curl ca-certificates nginx certbot python3-certbot-nginx git ufw
+apt-get install -y curl ca-certificates nginx certbot python3-certbot-nginx git ufw python3-pil
 nodeok() { command -v node >/dev/null && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ]; }
 nodeok || apt-get install -y nodejs || true
 if ! nodeok; then curl -fsSL https://deb.nodesource.com/setup_20.x | bash - ; apt-get install -y nodejs; fi

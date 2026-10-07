@@ -16,6 +16,7 @@ const ID = process.env.SALUT_ID || '', SECRET = process.env.SALUT_SECRET || '';
 const DATA = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const IMGDIR = process.env.IMG_DIR || '/var/www/salut38/img';
 const IMGURL = process.env.IMG_URL || '/img';
+const RAWDIR = process.env.IMG_RAW_DIR || path.join(DATA, 'img-orig'), NORMV = '1'; // NORMV меняйте при смене правил выравнивания: браузеры подтянут новые картинки
 const VIDDIR = process.env.VIDEO_DIR || '/var/www/salut38/video', VIDURL = process.env.VIDEO_URL || '/video';
 const MARKUP = +process.env.PRICE_MARKUP || 1; // 1 = без наценки
 const F = { token: path.join(DATA, 'supplier-token.json'), feed: path.join(DATA, 'feed.json'), status: path.join(DATA, 'sync-status.json') };
@@ -179,7 +180,7 @@ async function main() {
         catch (e) { sk.noimg++; return; }
       }
     }
-    ad.push({ sku: c.art, name: cleanName(c.it.name) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn });
+    ad.push({ sku: c.art, name: cleanName(c.it.name) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV });
   });
   ad.sort((a, b) => a.price - b.price);
 
@@ -196,9 +197,13 @@ async function main() {
   };
   if (!DRY) { try { fs.mkdirSync(IMGDIR, { recursive: true }); fs.mkdirSync(VIDDIR, { recursive: true }); } catch (e) { log('нет папки для медиа:', e.message); } }
   await pool(have, 4, async h => {
-    if (h.it.img) { const f = await fetchFile(h.it.img, IMGDIR, h.art, 'jpg', ['jpg', 'jpeg', 'png', 'webp'], 500, false); if (f) { im[h.art] = IMGURL + '/' + f; md.img++; } }
+    if (h.it.img) { const f = await fetchFile(h.it.img, IMGDIR, h.art, 'jpg', ['jpg', 'jpeg', 'png', 'webp'], 500, false); if (f) { im[h.art] = IMGURL + '/' + f + '?n=' + NORMV; md.img++; } }
     if (h.it.video_mp4) { const f = await fetchFile(h.it.video_mp4, VIDDIR, h.art, 'mp4', ['mp4'], 5000, true); if (f) { vd[h.art] = VIDURL + '/' + f; md.vid++; } }
   });
+  if (!DRY) { // выравнивание картинок: одинаковый квадрат и поля (нужен python3-pil); оригиналы сохраняются в IMG_RAW_DIR
+    try { const out = require('child_process').execFileSync('python3', [path.join(__dirname, 'normalize.py'), IMGDIR, RAWDIR, ...(process.argv.includes('--renormalize') ? ['--all'] : [])], { encoding: 'utf8', timeout: 20 * 60e3 }); log(out.trim().split('\n').slice(-3).join(' | ')); }
+    catch (e) { log('выравнивание картинок пропущено:', String(e.message).split('\n')[0]); }
+  }
   log('Свои копии на сервере: картинок', md.img, '| видео', md.vid, '| ошибок скачивания', md.fail);
 
   diffs.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));

@@ -3,7 +3,8 @@
 set -euo pipefail
 . /etc/salut38.conf
 [ "${1:-}" = "nopull" ] || git -C "$SRC" pull --ff-only
-cp -r "$SRC/server/check-feed.js" "$SRC/server/server.js" "$SRC/server/cardbot.js" "$SRC/server/sync.js" "$SRC/server/public" "$SRC/server/catalog.json" /opt/bs/
+python3 -c "import PIL" 2>/dev/null || apt-get install -y python3-pil >/dev/null
+cp -r "$SRC/server/normalize.py" "$SRC/server/check-feed.js" "$SRC/server/server.js" "$SRC/server/cardbot.js" "$SRC/server/sync.js" "$SRC/server/public" "$SRC/server/catalog.json" /opt/bs/
 mkdir -p /var/www/salut38/img /var/www/salut38/video
 chown -R bs:bs /opt/bs /var/lib/bs-data /var/www/salut38/img /var/www/salut38/video
 sed "s#__ORDER_URL__#https://app.$BASE/order#g" "$SRC/site/index.html" > /var/www/salut38/index.html
