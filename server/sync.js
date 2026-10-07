@@ -135,6 +135,8 @@ async function main() {
   if (list.length < 20 || (prevN && list.length < prevN * 0.5)) return fail(`подозрительно мало товаров у поставщика (${list.length}, раньше ${prevN}); сайт не изменён`, 3);
 
   const showArg = (process.argv.find(a => a.startsWith('--show=')) || '').slice(7);
+  const findArg = (process.argv.find(a => a.startsWith('--find=')) || '').slice(7).toLowerCase();
+  if (findArg) { list.filter(it => String(it.name || '').toLowerCase().includes(findArg)).slice(0, 10).forEach(it => log('НАЙДЕНО: ' + it.art + ' | ' + it.name + ' | ' + it.category_name + ' | залпов ' + it.vystrel + ' | about: ' + String(it.about || '').replace(/\r?\n/g, ' ¶ '))); return; }
   if (process.argv.includes('--finale')) { // как у поставщика обозначен финал: ищем по всем товарам слова «финал/заключитель/завершающ» в описании и в названиях полей
     const keys = {}; list.forEach(it => Object.keys(it).forEach(k => keys[k] = (keys[k] || 0) + 1)); log('ПОЛЯ у товаров:', JSON.stringify(keys));
     const re = /финал|заключит|завершающ|кульминац|залп-финал/i, hit = list.filter(it => re.test(JSON.stringify(it.about || '')));
