@@ -90,10 +90,14 @@ const stockOf = v => { // "20+" -> 20; пусто, 0, «нет» -> 0
   const m = s.match(/^\d+/); if (m) return +m[0];
   return /нет|отсутств|ожида/.test(s) ? 0 : 1; // непонятный текст («много», «в наличии») = есть
 };
-const cleanName = n => { // название поставщика без лишнего: скобки с содержимым, «НАРОДНАЯ ЦЕНА», «*1/6», размеры «1,2"х36», «5 эффектов»
+const cleanName = (n, art) => { // название поставщика без лишнего: скобки с содержимым, «НАРОДНАЯ ЦЕНА», «*1/6», размеры «1,2"х36», «5 эффектов»
   let t = String(n || '');
   for (let k = 0; k < 4; k++) t = t.replace(/\([^()]*\)/g, ' ');
   t = t.replace(/\([^)]*$/, ' ').replace(/НАРОДНАЯ\s+ЦЕНА!?/gi, ' ').replace(/\*\s*\d+(\/\d+)?(\s*шт\.?)?/gi, ' ').replace(/(^|\s)\d+([,.]\d+)?\s*["”″]?\s*[xх×]\s*\d+(?=\s|$)/gi, ' ').replace(/\s\d+\s*эффект\S*/gi, ' ').replace(/\s+НАРОД\S*$/i, '');
+  t = t.replace(/АКЦИЯ!*/gi, ' ').replace(/\/\s*\d+\s*шт\.?\s*\//gi, ' ').replace(/\s+\/\s*\d*\s*$/, '').replace(/\s+\/\s*$/, '');
+  const a = String(art || '').trim(); if (a && t.toLowerCase().startsWith(a.toLowerCase() + ' ')) t = t.slice(a.length);
+  t = t.replace(/^\s*[A-Za-z0-9-]*\d[A-Za-z0-9-]*\s+(?=[А-Яа-яЁё])/, '');
+  t = t.replace(/(["»”])(?=[А-Яа-яЁёA-Za-z])/g, '$1 ');
   t = t.replace(/[\s,;]*\b\d+\s*шт\.?\s*$/i, '');
   return t.replace(/\s+/g, ' ').replace(/\s+([,.!])/g, '$1').replace(/\s+(["»”])(?=\s*$|[,.!])/g, '$1').replace(/[\s,;:*-]+$/, '').trim();
 };
@@ -125,7 +129,7 @@ async function main() {
   if (list.length < 20 || (prevN && list.length < prevN * 0.5)) return fail(`подозрительно мало товаров у поставщика (${list.length}, раньше ${prevN}); сайт не изменён`, 3);
 
   const showArg = (process.argv.find(a => a.startsWith('--show=')) || '').slice(7);
-  if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, станет: cleanName(it.name), cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4 }))); return; }
+  if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, станет: cleanName(it.name, it.art), cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4 }))); return; }
   // у поставщика один артикул бывает у разных товаров (например, «Хоровод» НФ7040 и «Сибирское золото» БС711): строку выбираем по названию
   const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
   const rowsBy = new Map(), dup = new Set();
@@ -148,7 +152,7 @@ async function main() {
     const r = rs.reduce((m, x) => better(x, m) ? x : m);
     if (!(r.price > 0)) { noPrice++; continue; }
     chosen.set(b.sku, r); pr[b.sku] = r.price;
-    const nn = cleanName(r.it.name); if (nn && nn !== b.name) { nmap[b.sku] = nn; if (!r.sn) renamed.push({ sku: b.sku, from: b.name, to: nn }); }
+    const nn = cleanName(r.it.name, r.it.art); if (nn && nn !== b.name) { nmap[b.sku] = nn; if (!r.sn) renamed.push({ sku: b.sku, from: b.name, to: nn }); }
     if (r.price === b.price) same++; else diffs.push({ sku: b.sku, name: b.name, from: b.price, to: r.price, raw: r.it.price_roz, uc: r.it.unit_count, un: r.it.unit_name, pct: (r.price - b.price) / b.price });
   }
   log('Названия берём у поставщика (всё с первой скобки удаляем). Изменится названий:', Object.keys(nmap).length, '| из них полностью другое название:', renamed.length);
@@ -180,7 +184,7 @@ async function main() {
         catch (e) { sk.noimg++; return; }
       }
     }
-    ad.push({ sku: c.art, name: cleanName(c.it.name) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img) });
+    ad.push({ sku: c.art, name: cleanName(c.it.name, c.it.art) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img) });
   });
   ad.sort((a, b) => a.price - b.price);
 
