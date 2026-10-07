@@ -278,6 +278,7 @@ footer{background:#fff}
 .vbox header b{flex:1;font-size:14px;line-height:1.25}
 #vclose{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;font-size:22px;line-height:1;flex:none}
 .vframe{aspect-ratio:16/9;background:#000}
+.vframe video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .vframe iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 
 
@@ -704,7 +705,7 @@ function card(p){
   const n=cart[p.sku]||0,k=esc(p.sku);
   const spec=specHtml(p);
   return `<article class="card" data-open="${k}">${p.hit?'<span class="hit">Хит</span>':''}
-    <div class="img">${thumb(p)}${p.v?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотреть видео"><i></i>Видео</button>`:''}</div>
+    <div class="img">${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотреть видео"><i></i>Видео</button>`:''}</div>
     <div class="info"><div class="brand">${esc(p.brand)}</div><h3>${esc(p.name)}</h3><div class="spec">${spec}</div><div class="price">${ruble(p.price)}</div>
     ${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div>`
        :`<button class="add" data-p="${k}">В корзину</button>`}
@@ -796,10 +797,10 @@ let PPSKU=null,PPH=false;
 let PPV=[];try{PPV=JSON.parse(localStorage.getItem('bs_viewed')||'[]')}catch(e){}
 function ppSeen(sku){PPV=[sku].concat(PPV.filter(x=>x!==sku)).slice(0,20);try{localStorage.setItem('bs_viewed',JSON.stringify(PPV))}catch(e){}}
 function ppHtml(p){const k=esc(p.sku),n=cart[p.sku]||0,base=(typeof total==='function'?total():0)+(n?0:p.price),pc=typeof tierPc==='function'?tierPc(base):5,sv=Math.round(base*pc/100);
-  const rows=[['Бренд',p.brand],['Категория',(p.cats||[]).filter(c=>c!=='Хит продаж').join(', ')],['Артикул',p.sku],['Видеообзор',p.v?'есть':'']].filter(r=>r[1]);
+  const rows=[['Бренд',p.brand],['Категория',(p.cats||[]).filter(c=>c!=='Хит продаж').join(', ')],['Артикул',p.sku],['Видеообзор',(p.v||p.vid)?'есть':'']].filter(r=>r[1]);
   const sim=PPV.filter(x=>x!==p.sku).map(x=>BY.get(x)).filter(Boolean).slice(0,12);
   return `<div class="pp-h"><button type="button" data-pp-x="1">← Назад</button><b>${esc(p.name)}</b></div>
-  <div class="pp-w"><div class="pp-img">${p.hit?'<span class="hit">Хит</span>':''}${thumb(p)}${p.v?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотреть видео"><i></i>Видео</button>`:''}</div>
+  <div class="pp-w"><div class="pp-img">${p.hit?'<span class="hit">Хит</span>':''}${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотреть видео"><i></i>Видео</button>`:''}</div>
    <div><div class="pp-br">${esc(p.brand)}</div><h1>${esc(p.name)}</h1><div class="pp-sp">${specHtml(p)}</div></div><div class="pp-pr">${ruble(p.price)}</div>
    <div class="pp-sv"><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://online-qr.ru/nazhalskidkuvopisanii/" target="_blank" rel="noopener">Получить карту</a></div>
    <div class="pp-t">${rows.map(r=>`<div><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>
@@ -821,10 +822,10 @@ document.addEventListener('click',e=>{
   const a=e.target.closest('article.card[data-open]');if(a&&!e.target.closest('button,a'))openProduct(a.dataset.open)});
 /* каталог из приложения сотрудников: скрытые товары и цены, выставленные менеджером */
 (function(){if(!window.ORDER_URL)return;const ctl=new AbortController();setTimeout(()=>ctl.abort(),5000);
-  fetch(new URL('/catalog',window.ORDER_URL).href,{signal:ctl.signal,cache:'no-store'}).then(r=>r.json()).then(j=>{const ov=(j&&j.o)||{},fd=(j&&j.f)||{},fp=fd.pr||{},fh=new Set(fd.hd||[]);let ch=false;
+  fetch(new URL('/catalog',window.ORDER_URL).href,{signal:ctl.signal,cache:'no-store'}).then(r=>r.json()).then(j=>{const ov=(j&&j.o)||{},fd=(j&&j.f)||{},fp=fd.pr||{},fi=fd.im||{},fv=fd.vd||{},fh=new Set(fd.hd||[]);let ch=false;
     /* выгрузка поставщика: новые карточки, цены и скрытие товаров, которых у поставщика нет в наличии */
     (fd.ad||[]).forEach(a=>{if(a&&a.sku&&a.price>0&&Array.isArray(a.cats)&&a.img&&!BY.has(a.sku)){const i=PRODUCTS.length;a.c=PAL[i%PAL.length];a.hit=false;a._s=(a.name+' '+a.sku+' '+(a.brand||'')).toLowerCase();a.i=i;PRODUCTS.push(a);BY.set(a.sku,a);ch=true}});
-    PRODUCTS.forEach(p=>{const q=fp[p.sku];if(q>0&&q!==p.price){p.price=q;ch=true}const o=ov[p.sku];if(o&&o.p>0&&o.p!==p.price){p.price=o.p;ch=true}});
+    PRODUCTS.forEach(p=>{if(fi[p.sku]&&p.img!==fi[p.sku]){p.img=fi[p.sku];ch=true}if(fv[p.sku]&&p.vid!==fv[p.sku]){p.vid=fv[p.sku];ch=true}const q=fp[p.sku];if(q>0&&q!==p.price){p.price=q;ch=true}const o=ov[p.sku];if(o&&o.p>0&&o.p!==p.price){p.price=o.p;ch=true}});
     for(let i=PRODUCTS.length-1;i>=0;i--){const s=PRODUCTS[i].sku,o=ov[s];if(fh.has(s)||(o&&o.h)){PRODUCTS.splice(i,1);ch=true}}
     if(ch){Object.keys(CNT).forEach(k=>delete CNT[k]);PRODUCTS.forEach(p=>p.cats.forEach(c=>CNT[c]=(CNT[c]||0)+1));renderCats();renderGrid();renderCart()}}).catch(()=>{})})();
 let PROMO='',PROMO_OK=false,PROMO_INFO=null,PROMO_MSG='';
@@ -917,7 +918,7 @@ function renderCart(){
   const info=PROMO_OK?PROMO_INFO:null,dsc=discOf(info,tt),dpc=info?Math.round(dsc/tt*100):0,pay=tt-dsc;
   const lines=items.map(k=>{
     const p=BY.get(k);
-    return `<div class="line"><div class="t${p.v?' hasv':''}"${p.v?` data-v="${esc(p.sku)}"`:''}>${thumb(p)}${p.v?`<button type="button" class="vbtn" data-v="${esc(p.sku)}"><i></i>Видео</button>`:''}</div>
+    return `<div class="line"><div class="t${(p.v||p.vid)?' hasv':''}"${(p.v||p.vid)?` data-v="${esc(p.sku)}"`:''}>${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${esc(p.sku)}"><i></i>Видео</button>`:''}</div>
       <div class="li"><b>${p.name}</b><small>${ruble(p.price)}</small>
         <div class="q"><button data-m="${k}" aria-label="Меньше">−</button><b>${cart[k]}</b><button data-p="${k}" aria-label="Больше">+</button></div>
         <b class="lt">${ruble(p.price*cart[k])}</b></div></div>`}).join('')+`<div class="cardsave"${PROMO_OK?' style="display:none"':''}><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://online-qr.ru/nazhalskidkuvopisanii/" target="_blank" rel="noopener">Получить карту</a></div>`;
@@ -1116,9 +1117,9 @@ document.addEventListener('change',function(e){if(e.target.id==='kitKids'){K.kid
 window.kitBuild=function(b,o,k,sw){K.budget=b;K.occ=o||'ny';K.show=sw||'long';K.kids=!!k;K.seed=1;build();return K.items.map(function(x){return{sku:x.p.sku,price:x.p.price,role:x.role}})};
 })();
 /* ===== Видео Rutube ===== */
-function openVideo(sku){const p=BY.get(sku);if(!p||!p.v)return;
+function openVideo(sku){const p=BY.get(sku);if(!p||!(p.v||p.vid))return;
   document.getElementById('vtitle2').textContent=p.name;
-  document.getElementById('vframe').innerHTML='<iframe src="https://rutube.ru/play/embed/'+encodeURIComponent(p.v)+'" allow="autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="Видео"></iframe>';
+  document.getElementById('vframe').innerHTML=p.vid?'<video src="'+esc(p.vid)+'" controls autoplay playsinline style="width:100%;height:100%;background:#000"></video>':'<iframe src="https://rutube.ru/play/embed/'+encodeURIComponent(p.v)+'" allow="autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="Видео"></iframe>';
   var base=(typeof total==='function'?total():0)+(cart[p.sku]?0:p.price),pc=base<5000?5:base<20000?10:base<50000?15:base<100000?20:base<500000?25:30,sv=Math.round(p.price*pc/100);document.getElementById('vsave').innerHTML='💸 Дешевле на <b>'+new Intl.NumberFormat('ru-RU').format(sv)+' ₽</b> с виртуальной дисконтной картой';VSKU=p.sku;vRefresh();document.getElementById('vmodal').classList.add('on')}
 var VSKU=null;
 function vRefresh(){var el=document.getElementById('vbuy');if(!el||!VSKU)return;var p=BY.get(VSKU);if(!p)return;var n=cart[VSKU]||0;

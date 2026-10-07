@@ -23,12 +23,12 @@ let orders = load(F.orders, {}), users = load(F.users, null), sessions = load(F.
 const BASE0 = load(path.join(__dirname, 'catalog.json'), []); // базовый каталог (файл catalog.json)
 // Выгрузка поставщика (САЛЮТ-1): цены, скрытые товары и новые карточки. Пишет sync.js в DATA/feed.json
 const FEEDF = path.join(DATA, 'feed.json');
-let FEED = { t: 0, pr: {}, hd: [], ad: [] }, feedM = 0, feedChk = 0, BASE = BASE0;
+let FEED = { t: 0, im: {}, vd: {}, pr: {}, hd: [], ad: [] }, feedM = 0, feedChk = 0, BASE = BASE0;
 function refreshFeed() {
   const now = Date.now(); if (now - feedChk < 5000) return; feedChk = now;
   let m = 0; try { m = fs.statSync(FEEDF).mtimeMs } catch {} if (m === feedM) return; feedM = m;
   const f = load(FEEDF, null); if (!f || typeof f !== 'object') return;
-  FEED = { t: +f.t || 0, pr: f.pr || {}, hd: Array.isArray(f.hd) ? f.hd : [], ad: Array.isArray(f.ad) ? f.ad : [] };
+  FEED = { t: +f.t || 0, im: f.im || {}, vd: f.vd || {}, pr: f.pr || {}, hd: Array.isArray(f.hd) ? f.hd : [], ad: Array.isArray(f.ad) ? f.ad : [] };
   BASE = BASE0.map(b => FEED.pr[b.sku] > 0 ? { ...b, price: FEED.pr[b.sku] } : b).concat(FEED.ad);
 }
 refreshFeed();
@@ -212,7 +212,7 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/catalog') { // сайт: что скрыто и какие цены выставлены в приложении
     if (limit('g' + ipOf(req), 120, 60e3)) return send(res, 429, {}, CORS);
     const o = {}; for (const k in cat) { const v = cat[k]; if (v.h || v.p > 0) o[k] = { ...(v.p > 0 ? { p: v.p } : {}), ...(v.h ? { h: 1 } : {}) } }
-    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad } }, { ...CORS, 'cache-control': 'no-store' });
+    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, im: FEED.im, vd: FEED.vd, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad } }, { ...CORS, 'cache-control': 'no-store' });
   }
 
   if (m === 'GET' && p === '/api/users') return send(res, 200, users.map(pub)); // для экрана входа, без PIN

@@ -4,8 +4,8 @@ set -euo pipefail
 . /etc/salut38.conf
 [ "${1:-}" = "nopull" ] || git -C "$SRC" pull --ff-only
 cp -r "$SRC/server/server.js" "$SRC/server/sync.js" "$SRC/server/public" "$SRC/server/catalog.json" /opt/bs/
-mkdir -p /var/www/salut38/img
-chown -R bs:bs /opt/bs /var/lib/bs-data /var/www/salut38/img
+mkdir -p /var/www/salut38/img /var/www/salut38/video
+chown -R bs:bs /opt/bs /var/lib/bs-data /var/www/salut38/img /var/www/salut38/video
 sed "s#__ORDER_URL__#https://app.$BASE/order#g" "$SRC/site/index.html" > /var/www/salut38/index.html
 if [ "$MODE" = "temp" ]; then cp "$SRC/site/robots-temp.txt" /var/www/salut38/robots.txt; else cp "$SRC/site/robots.txt" /var/www/salut38/robots.txt; fi
 cat > /etc/systemd/system/bs-sync.service <<'U'
@@ -17,6 +17,7 @@ User=bs
 WorkingDirectory=/opt/bs
 EnvironmentFile=/etc/bs.env
 Environment=IMG_DIR=/var/www/salut38/img
+Environment=VIDEO_DIR=/var/www/salut38/video
 ExecStart=/usr/bin/node /opt/bs/sync.js
 U
 cat > /etc/systemd/system/bs-sync.timer <<'U'

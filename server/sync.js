@@ -16,6 +16,8 @@ const ID = process.env.SALUT_ID || '', SECRET = process.env.SALUT_SECRET || '';
 const DATA = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const IMGDIR = process.env.IMG_DIR || '/var/www/salut38/img';
 const IMGURL = process.env.IMG_URL || '/img';
+const VIDDIR = process.env.VIDEO_DIR || '/var/www/salut38/video', VIDURL = process.env.VIDEO_URL || '/video';
+const VIDMAX = (+process.env.VIDEO_MAX_MB || 60) * 1048576; // больше — не скачиваем
 const MARKUP = +process.env.PRICE_MARKUP || 1; // 1 = без наценки
 const F = { token: path.join(DATA, 'supplier-token.json'), feed: path.join(DATA, 'feed.json'), status: path.join(DATA, 'sync-status.json') };
 
@@ -145,6 +147,24 @@ async function main() {
   });
   ad.sort((a, b) => a.price - b.price);
 
+  // свои копии картинок и видео поставщика для всех товаров в наличии (на нашем сервере)
+  const im = {}, vd = {}, md = { img: 0, vid: 0, vbig: 0, fail: 0 };
+  const have = [...base.filter(b => pr[b.sku]).map(b => ({ art: b.sku, it: api.get(b.sku).it })), ...cand.filter(c => ad.some(a => a.sku === c.art))];
+  const fetchFile = async (url, dir, art, defExt, okExts, minB, maxB) => {
+    const ext = (String(url).split('?')[0].match(/\.([a-z0-9]{2,4})$/i) || [, defExt])[1].toLowerCase();
+    if (!okExts.includes(ext)) return null;
+    const fn = crypto.createHash('md5').update(art).digest('hex').slice(0, 12) + '.' + ext, file = path.join(dir, fn);
+    if (fs.existsSync(file)) return fn;
+    if (DRY) return fn;
+    try { const b = await get(url, { raw: true }); if (b.length < minB) throw 0; if (maxB && b.length > maxB) { md.vbig++; return null; } fs.writeFileSync(file, b); return fn; } catch { md.fail++; return null; }
+  };
+  if (!DRY) { try { fs.mkdirSync(IMGDIR, { recursive: true }); fs.mkdirSync(VIDDIR, { recursive: true }); } catch (e) { log('нет папки для медиа:', e.message); } }
+  await pool(have, 4, async h => {
+    if (h.it.img) { const f = await fetchFile(h.it.img, IMGDIR, h.art, 'jpg', ['jpg', 'jpeg', 'png', 'webp'], 500, 0); if (f) { im[h.art] = IMGURL + '/' + f; md.img++; } }
+    if (h.it.video_mp4) { const f = await fetchFile(h.it.video_mp4, VIDDIR, h.art, 'mp4', ['mp4'], 5000, VIDMAX); if (f) { vd[h.art] = VIDURL + '/' + f; md.vid++; } }
+  });
+  log('Свои копии на сервере: картинок', md.img, '| видео', md.vid, '| видео больше лимита', md.vbig, '| ошибок скачивания', md.fail);
+
   diffs.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
   log('--- ИТОГ ---');
   log('Товаров в каталоге сайта:', base.length, '| цена та же:', same, '| цена изменится:', diffs.length, '| будут скрыты (нет у поставщика):', hd.length, '| без цены у поставщика (цена не меняется):', noPrice);
@@ -156,7 +176,7 @@ async function main() {
   if (DRY) { log('Пробный прогон завершён, файл не записан.'); return; }
 
   if (!prev && hd.length > base.length * 0.5 && !process.argv.includes('--force')) return fail(`при первом запуске скрылось бы ${hd.length} из ${base.length} товаров: похоже на неполную выгрузку. Проверьте пробным прогоном (--dry); если так и должно быть, запустите с --force`, 4);
-  saveAtomic(F.feed, { t: Date.now(), apiN: list.length, pr, hd, ad });
+  saveAtomic(F.feed, { t: Date.now(), apiN: list.length, im, vd, pr, hd, ad });
   saveAtomic(F.status, { ok: true, at: new Date().toISOString(), apiN: list.length, changed: diffs.length, hidden: hd.length, added: ad.length });
   log('Готово: данные записаны, сайт обновится сам.');
 }

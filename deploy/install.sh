@@ -65,6 +65,7 @@ server {
   index index.html;
   gzip on; gzip_types text/html text/css application/javascript application/json image/svg+xml;
   $ROBOTS
+  location /video/ { expires 30d; add_header Cache-Control "public"; }
   location /img/ { expires 30d; add_header Cache-Control "public"; }
   location / { try_files \$uri /index.html; }
   location = /index.html { add_header Cache-Control "no-cache"; $ROBOTS }
