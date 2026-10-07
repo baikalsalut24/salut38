@@ -200,7 +200,7 @@ async function main() {
   log('Новых карточек (в наличии, есть картинка, категория известна):', ad.length || cand.length);
   log('Пропущено новых: нет в наличии', sk.stock, '| нет картинки', sk.noimg, '| неизвестная категория', sk.nocat, '| нет цены', sk.noprice);
   if (Object.keys(sk.cats).length) log('Неизвестные категории:', Object.entries(sk.cats).map(([k, v]) => k + ' ×' + v).join('; '));
-  if (dup.size) log('Повторяющихся артикулов у поставщика:', dup.size, '(берётся позиция в наличии с меньшей ценой)');
+  if (dup.size) log('Повторяющихся артикулов у поставщика:', dup.size, '(берётся строка, где название совпадает с сайтом)');
   if (diffs.length) { log('Самые большие изменения цены:'); diffs.slice(0, 12).forEach(d => log('  ' + d.sku, '|', d.name.slice(0, 32), '|', d.from, '->', d.to, '(' + (d.pct > 0 ? '+' : '') + Math.round(d.pct * 100) + '%)', '| поставщик: price_roz=' + d.raw + ', в упаковке ' + d.uc + ' ' + d.un)); }
   if (DRY) { log('Пробный прогон завершён, файл не записан.'); return; }
 
