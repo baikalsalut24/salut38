@@ -119,29 +119,33 @@ async function main() {
 
   const showArg = (process.argv.find(a => a.startsWith('--show=')) || '').slice(7);
   if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4 }))); return; }
-  const api = new Map(), dup = new Set();
+  // у поставщика один артикул бывает у разных товаров (например, «Хоровод» НФ7040 и «Сибирское золото» БС711): строку выбираем по названию
+  const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
+  const rowsBy = new Map(), dup = new Set();
   for (const it of list) {
     const art = String(it.art || '').trim(); if (!art) continue;
-    const row = { it, st: stockOf(it.sklad), price: money(it.price_roz, packOf(it)) };
-    if (api.has(art)) { dup.add(art); const o = api.get(art); if ((row.st > 0 && o.st === 0) || (row.st > 0 && o.st > 0 && row.price && row.price < o.price)) api.set(art, row); } else api.set(art, row);
+    const row = { it, st: stockOf(it.sklad), price: money(it.price_roz, packOf(it)), own: String(it.name || '').includes('(' + art + ')') };
+    if (rowsBy.has(art)) { dup.add(art); rowsBy.get(art).push(row) } else rowsBy.set(art, [row]);
   }
+  const better = (x, y) => (x.own !== y.own ? x.own : (x.st > 0) !== (y.st > 0) ? x.st > 0 : (x.price && y.price ? x.price < y.price : false));
+  const api = new Map(); // для новых карточек: лучшая строка артикула
+  for (const [art, rs] of rowsBy) api.set(art, rs.reduce((m, r) => better(r, m) ? r : m));
+  const sameName = (a, c) => { a = nz(a); c = nz(c); return !a || !c || a.includes(c) || c.includes(a); };
 
-  const pr = {}, hd = [], diffs = [], inBase = new Set(base.map(b => b.sku));
+  const pr = {}, hd = [], diffs = [], inBase = new Set(base.map(b => b.sku)), chosen = new Map(), nm = [];
   let same = 0, noPrice = 0;
   for (const b of base) {
-    const r = api.get(b.sku);
-    if (!r || r.st <= 0) { hd.push(b.sku); continue; }
+    const rs = (rowsBy.get(b.sku) || []).filter(r => r.st > 0);
+    if (!rs.length) { hd.push(b.sku); continue; }
+    const ok = rs.filter(r => sameName(b.name, r.it.name));
+    if (!ok.length) { nm.push({ sku: b.sku, site: b.name, sup: rs[0].it.name }); continue; } // название другое: цену и картинку не трогаем, товар не скрываем
+    const r = ok.reduce((m, x) => better(x, m) ? x : m);
     if (!(r.price > 0)) { noPrice++; continue; }
-    pr[b.sku] = r.price;
+    chosen.set(b.sku, r); pr[b.sku] = r.price;
     if (r.price === b.price) same++; else diffs.push({ sku: b.sku, name: b.name, from: b.price, to: r.price, raw: r.it.price_roz, uc: r.it.unit_count, un: r.it.unit_name, pct: (r.price - b.price) / b.price });
   }
-
-  // контроль: название на сайте и у поставщика должны совпадать (иначе картинка/цена могут быть чужими)
-  const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
-  const nm = [];
-  for (const b of base) { const r = api.get(b.sku); if (!r || r.st <= 0) continue; const a = nz(b.name), c = nz(r.it.name); if (a && c && !a.includes(c) && !c.includes(a)) nm.push({ sku: b.sku, site: b.name, sup: r.it.name }); }
-  log('Названия на сайте и у поставщика не совпадают:', nm.length, 'из', base.length - hd.length);
-  nm.slice(0, 12).forEach(x => log('  ' + x.sku + ' | сайт: ' + x.site + ' | поставщик: ' + String(x.sup).slice(0, 50)));
+  log('Название у поставщика другое — цена, картинка и видео НЕ обновляются, товар остаётся:', nm.length);
+  nm.slice(0, 40).forEach(x => log('  ' + x.sku + ' | сайт: ' + x.site + ' | поставщик: ' + String(x.sup).slice(0, 50)));
 
   // новые карточки
   const sk = { stock: 0, noimg: 0, nocat: 0, noprice: 0, cats: {} }, cand = [];
@@ -174,7 +178,7 @@ async function main() {
 
   // свои копии картинок и видео поставщика для всех товаров в наличии (на нашем сервере)
   const im = {}, vd = {}, md = { img: 0, vid: 0, fail: 0 };
-  const have = [...base.filter(b => pr[b.sku]).map(b => ({ art: b.sku, it: api.get(b.sku).it })), ...cand.filter(c => ad.some(a => a.sku === c.art))];
+  const have = [...base.filter(b => chosen.has(b.sku)).map(b => ({ art: b.sku, it: chosen.get(b.sku).it })), ...cand.filter(c => ad.some(a => a.sku === c.art))];
   const fetchFile = async (url, dir, art, defExt, okExts, minB, stream) => {
     const ext = (String(url).split('?')[0].match(/\.([a-z0-9]{2,4})$/i) || [, defExt])[1].toLowerCase();
     if (!okExts.includes(ext)) return null;
