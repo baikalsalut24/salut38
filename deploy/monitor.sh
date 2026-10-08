@@ -4,7 +4,7 @@
 ST=/var/lib/bs-data/monitor.state; touch "$ST"
 P=()
 cores=$(nproc); load=$(cut -d' ' -f2 /proc/loadavg)   # нагрузка за 5 минут
-systemctl is-active --quiet bs-sync.service || awk -v l="$load" -v c="$cores" 'BEGIN{exit !(l>c*0.8)}' && P+=("нагрузка процессора больше 80% ($load на $cores ядра)")
+! systemctl is-active --quiet bs-sync.service && awk -v l="$load" -v c="$cores" 'BEGIN{exit !(l>c*0.8)}' && P+=("нагрузка процессора больше 80% ($load на $cores ядра)")
 mem=$(awk '/MemAvailable/{a=$2}/MemTotal/{t=$2}END{printf "%d",a*100/t}' /proc/meminfo); [ "$mem" -lt 20 ] && P+=("занято больше 80% памяти (свободно ${mem}%)")
 dsk=$(df / | awk 'NR==2{gsub("%","");print $5}'); [ "$dsk" -gt 80 ] && P+=("диск заполнен больше чем на 80% (${dsk}%)")
 systemctl is-active --quiet bs || P+=("сервис заказов bs не работает")
