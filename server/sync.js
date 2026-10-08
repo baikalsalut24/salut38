@@ -251,6 +251,10 @@ async function main() {
     const used = new Set([...Object.values(im), ...ad.map(a => a.img)].map(u => u.split('?')[0].split('/').pop()));
     if (used.size > 50) for (const dir of [IMGDIR, RAWDIR]) for (const f of fs.readdirSync(dir)) if (/\.(jpe?g|png|webp)$/i.test(f) && !used.has(f) && !/^own-/.test(f)) fs.unlinkSync(path.join(dir, f));
   } catch (e) { log('очистка старых картинок пропущена:', e.message); }
+  try { // видео товаров, которых больше нет в выгрузке (закончились у поставщика): удаляем через 7 дней, чтобы не качать заново при кратком исчезновении
+    const usedV = new Set(Object.values(vd).map(u => u.split('?')[0].split('/').pop()));
+    if (usedV.size > 50) for (const f of fs.readdirSync(VIDDIR)) { const fp = path.join(VIDDIR, f); if (/\.mp4$/i.test(f) && !usedV.has(f) && !/^own-/.test(f) && Date.now() - fs.statSync(fp).mtimeMs > 7 * 864e5) fs.unlinkSync(fp); }
+  } catch (e) { log('очистка старых видео пропущена:', e.message); }
   log('Готово: данные записаны, сайт обновится сам.');
 }
 main().catch(e => fail(e.message || String(e)));
