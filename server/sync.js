@@ -168,10 +168,15 @@ async function main() {
   // у поставщика один артикул бывает у разных товаров (например, «Хоровод» НФ7040 и «Сибирское золото» БС711): строку выбираем по названию
   const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
   const rowsBy = new Map(), dup = new Set();
+  // Код товара. У собственной продукции «Байкал Салют» в поле артикула стоит номер сертификата НФ, а настоящий код (он же напечатан на коробке)
+  // — в скобках в названии: «Не звезди! (1,0"х48) (БС754)». Такой товар ведём под кодом БС754; артикул НФ у поставщика может делить и другой товар.
+  const keyOf = it => { const art = String(it.art || '').trim(); const m = String(it.name || '').match(/\(\s*(БС)\s*-?\s*(\d+)\s*\)/gi); if (!m) return art; const c = m[m.length - 1].replace(/[()\s-]/g, '').toUpperCase(); return c || art; };
+  const aliasArt = new Set();
   for (const it of list) {
     const art = String(it.art || '').trim(); if (!art) continue;
-    const row = { it, st: stockOf(it.sklad), price: money(it.price_roz, packOf(it)), own: String(it.name || '').includes('(' + art + ')'), sn: false };
-    if (rowsBy.has(art)) { dup.add(art); rowsBy.get(art).push(row) } else rowsBy.set(art, [row]);
+    const key = keyOf(it); if (key !== art) aliasArt.add(art);
+    const row = { it, key, st: stockOf(it.sklad), price: money(it.price_roz, packOf(it)), own: String(it.name || '').includes('(' + key + ')'), sn: false };
+    if (rowsBy.has(key)) { dup.add(key); rowsBy.get(key).push(row) } else rowsBy.set(key, [row]);
   }
   const better = (x, y) => ((x.st > 0) !== (y.st > 0) ? x.st > 0 : x.sn !== y.sn ? x.sn : x.own !== y.own ? x.own : (x.price && y.price ? x.price < y.price : false)); // наличие, совпадение с названием на сайте, артикул в скобках, цена
   const api = new Map(); // для новых карточек: лучшая строка артикула
@@ -233,6 +238,7 @@ async function main() {
   for (const k of Object.keys(store)) {
     if (curAd.has(k)) continue;
     if (inBase.has(k) || manualHide.has(k)) { continue; }
+    if (aliasArt.has(k) && !rowsBy.has(k)) { dropped++; continue; } // старая карточка под артикулом НФ: товар теперь ведётся под своим кодом БС
     if (dOpen(k)) { dropped++; continue; }           // дефектная и не исправлена, а товара нет — удаляем карточку
     ad.push(store[k]); hd.push(k); keptHidden++;      // иначе просто скрываем
   }
