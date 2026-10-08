@@ -206,6 +206,20 @@ async function main() {
     }
     ad.push({ sku: c.art, name: cleanName(c.it.name, c.it.art) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img), fin: finOf(c.it) });
   });
+  // Созданные ранее карточки не пропадают, когда товар закончился у поставщика: они скрываются на сайте (hd) и возвращаются, когда товар снова в наличии.
+  // Удаляем только дефектные (водяной знак / мелкая картинка), которые вы не исправили, когда товар закончился.
+  const CARDF = path.join(DATA, 'cards.json');
+  let store = load(CARDF, null); if (!store) { store = {}; (prev && prev.ad || []).forEach(a => { store[a.sku] = a; }); }
+  const dAuto = load(path.join(DATA, 'defects-auto.json'), {}), dOwn = load(path.join(DATA, 'media-own.json'), {});
+  const dOpen = k => { const a = dAuto[k]; if (!a) return false; const o = dOwn[k] || {}; return !!((a.i && !o.img && !o.okI) || (a.v && !o.vid && !o.okV)); };
+  const curAd = new Set(ad.map(a => a.sku)); let keptHidden = 0, dropped = 0;
+  for (const k of Object.keys(store)) {
+    if (curAd.has(k)) continue;
+    if (inBase.has(k) || manualHide.has(k)) { continue; }
+    if (dOpen(k)) { dropped++; continue; }           // дефектная и не исправлена, а товара нет — удаляем карточку
+    ad.push(store[k]); hd.push(k); keptHidden++;      // иначе просто скрываем
+  }
+  log('Новые карточки: в наличии', curAd.size, '| скрыто (нет в наличии):', keptHidden, '| удалено (дефектные, не исправлены, нет в наличии):', dropped);
   ad.sort((a, b) => a.price - b.price);
 
   // свои копии картинок и видео поставщика для всех товаров в наличии (на нашем сервере)
@@ -224,6 +238,7 @@ async function main() {
     if (h.it.video_mp4 && !noVideo.has(h.art)) { const f = await fetchFile(h.it.video_mp4, VIDDIR, h.art, 'mp4', ['mp4'], 5000, true); if (f) { vd[h.art] = VIDURL + '/' + f; md.vid++; } }
   });
   // картинки существующих товаров — ваши прежние (из InSales), копируем на наш сервер; у товаров от поставщика (новые карточки) картинка поставщика
+  ad.forEach(a => { if (!curAd.has(a.sku) && prev && prev.vd && prev.vd[a.sku] && !vd[a.sku]) vd[a.sku] = prev.vd[a.sku]; }); // видео скрытых карточек сохраняем
   const hdSet = new Set(hd);
   await pool(base.filter(b => !hdSet.has(b.sku) && /^https?:/i.test(b.img || '')), 4, async b => {
     const f = await fetchFile(b.img, IMGDIR, 'is:' + b.sku, 'jpg', ['jpg', 'jpeg', 'png', 'webp'], 500, false); if (f) { im[b.sku] = IMGURL + '/' + f + '?n=' + NORMV; md.img++; }
@@ -245,6 +260,7 @@ async function main() {
   if (DRY) { log('Пробный прогон завершён, файл не записан.'); return; }
 
   if (!prev && hd.length > base.length * 0.5 && !process.argv.includes('--force')) return fail(`при первом запуске скрылось бы ${hd.length} из ${base.length} товаров: похоже на неполную выгрузку. Проверьте пробным прогоном (--dry); если так и должно быть, запустите с --force`, 4);
+  if (!DRY) { const so = {}; ad.forEach(a => { so[a.sku] = a; }); saveAtomic(CARDF, so); }
   saveAtomic(F.feed, { t: Date.now(), apiN: list.length, im, vd, nm: nmap, fn: fnmap, pr, hd, ad });
   saveAtomic(F.status, { ok: true, at: new Date().toISOString(), apiN: list.length, changed: diffs.length, hidden: hd.length, added: ad.length });
   try { // убираем картинки, на которые больше никто не ссылается (старые копии картинок поставщика)
