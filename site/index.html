@@ -725,7 +725,8 @@ function pImg(p){
 function thumb(p){return p.img?`<img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-sku="${esc(p.sku)}" onerror="fb(this)">`:pImg(p)}
 function fb(el){const p=BY.get(el.dataset.sku);if(p)el.outerHTML=pImg(p)}
 function zalp(n){n=Math.abs(n)%100;var d=n%10;return (n>10&&n<20)?'залпов':d===1?'залп':(d>1&&d<5)?'залпа':'залпов'}
-function specHtml(p){var h='';if(p.shots>1)h+='<span class="sz">'+p.shots+' '+zalp(p.shots)+(p.cal?',':'')+'</span>';if(p.cal)h+=(h?' ':'')+'<span class="nw">калибр '+esc(p.cal)+'</span>';return h||'&nbsp;'}
+function specHtml(p,full){var h='';if(p.shots>1)h+='<span class="sz">'+p.shots+' '+zalp(p.shots)+(p.cal?',':'')+'</span>';if(p.cal)h+=(h?' ':'')+'<span class="nw">калибр '+esc(p.cal)+((full&&p.du>0&&SORTCATS.some(function(c){return p.cats.indexOf(c)>-1}))?',':'')+'</span>';if(full&&p.du>0&&SORTCATS.some(function(c){return p.cats.indexOf(c)>-1}))h+=(h?' ':'')+'<span class="nw">работа ~'+durTxt(p.du)+'</span>';return h||'&nbsp;'}
+function durTxt(s){return s>=60?Math.floor(s/60)+' мин'+(s%60?' '+s%60+' с':''):s+' с'}
 function card(p){
   const n=cart[p.sku]||0,k=esc(p.sku);
   const spec=specHtml(p);
@@ -829,7 +830,7 @@ function ppHtml(p){const k=esc(p.sku),n=cart[p.sku]||0,base=(typeof total==='fun
   const sim=PPV.filter(x=>x!==p.sku).map(x=>BY.get(x)).filter(Boolean).slice(0,12);
   return `<div class="pp-h"><button type="button" data-pp-x="1">← Назад</button><b>${esc(p.name)}</b></div>
   <div class="pp-w"><div class="pp-img">${p.hit?'<span class="hit">Хит</span>':''}${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотреть видео"><i></i>Видео</button>`:''}</div>
-   <div><div class="pp-br">${esc(p.brand)}</div><h1>${esc(p.name)}</h1><div class="pp-sp">${specHtml(p)}</div></div><div class="pp-pr">${ruble(p.price)}</div>
+   <div><div class="pp-br">${esc(p.brand)}</div><h1>${esc(p.name)}</h1><div class="pp-sp">${specHtml(p,1)}</div></div><div class="pp-pr">${ruble(p.price)}</div>
    <div class="pp-sv"><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://online-qr.ru/nazhalskidkuvopisanii/" target="_blank" rel="noopener">Получить карту</a></div>
    <div class="pp-t">${rows.map(r=>`<div><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>
    ${sim.length?`<h2>Просмотренные товары</h2><div class="rail">${sim.map(card).join('')}</div>`:''}</div>
@@ -850,10 +851,10 @@ document.addEventListener('click',e=>{
   const a=e.target.closest('article.card[data-open]');if(a&&!e.target.closest('button,a'))openProduct(a.dataset.open)});
 /* каталог из приложения сотрудников: скрытые товары и цены, выставленные менеджером */
 (function(){if(!window.ORDER_URL)return;const ctl=new AbortController();setTimeout(()=>ctl.abort(),5000);
-  fetch(new URL('/catalog',window.ORDER_URL).href,{signal:ctl.signal,cache:'no-store'}).then(r=>r.json()).then(j=>{const ov=(j&&j.o)||{},fd=(j&&j.f)||{},fp=fd.pr||{},fi=fd.im||{},fv=fd.vd||{},fn=fd.nm||{},fh=new Set(fd.hd||[]);let ch=false;
+  fetch(new URL('/catalog',window.ORDER_URL).href,{signal:ctl.signal,cache:'no-store'}).then(r=>r.json()).then(j=>{const ov=(j&&j.o)||{},fd=(j&&j.f)||{},fp=fd.pr||{},fi=fd.im||{},fv=fd.vd||{},fu=fd.du||{},fn=fd.nm||{},fh=new Set(fd.hd||[]);let ch=false;
     /* выгрузка поставщика: новые карточки, цены и скрытие товаров, которых у поставщика нет в наличии */
     (fd.ad||[]).forEach(a=>{if(a&&a.sku&&a.price>0&&Array.isArray(a.cats)&&a.img&&!BY.has(a.sku)){const i=PRODUCTS.length;a.c=PAL[i%PAL.length];a.hit=false;a._s=(a.name+' '+a.sku+' '+(a.brand||'')).toLowerCase();a.i=i;PRODUCTS.push(a);BY.set(a.sku,a);ch=true}});
-    PRODUCTS.forEach(p=>{if(fn[p.sku]&&p.name!==fn[p.sku]){p.name=fn[p.sku];p._s=(p.name+' '+p.sku+' '+(p.brand||'')).toLowerCase();ch=true}if(fi[p.sku]&&p.img!==fi[p.sku]){p.img=fi[p.sku];ch=true}if(fv[p.sku]&&p.vid!==fv[p.sku]){p.vid=fv[p.sku];ch=true}const q=fp[p.sku];if(q>0&&q!==p.price){p.price=q;ch=true}const o=ov[p.sku];if(o&&o.p>0&&o.p!==p.price){p.price=o.p;ch=true}});
+    PRODUCTS.forEach(p=>{if(fn[p.sku]&&p.name!==fn[p.sku]){p.name=fn[p.sku];p._s=(p.name+' '+p.sku+' '+(p.brand||'')).toLowerCase();ch=true}if(fi[p.sku]&&p.img!==fi[p.sku]){p.img=fi[p.sku];ch=true}if(SORTCATS.some(function(c){return p.cats.indexOf(c)>-1})&&fu[p.sku]!==p.du){p.du=fu[p.sku];ch=true}if(fv[p.sku]&&p.vid!==fv[p.sku]){p.vid=fv[p.sku];ch=true}const q=fp[p.sku];if(q>0&&q!==p.price){p.price=q;ch=true}const o=ov[p.sku];if(o&&o.p>0&&o.p!==p.price){p.price=o.p;ch=true}});
     for(let i=PRODUCTS.length-1;i>=0;i--){const s=PRODUCTS[i].sku,o=ov[s];if(fh.has(s)||(o&&o.h)){PRODUCTS.splice(i,1);ch=true}}
     if(ch){Object.keys(CNT).forEach(k=>delete CNT[k]);PRODUCTS.forEach(p=>p.cats.forEach(c=>CNT[c]=(CNT[c]||0)+1));renderCats();renderGrid();renderCart()}}).catch(()=>{})})();
 let PROMO='',PROMO_OK=false,PROMO_INFO=null,PROMO_MSG='';

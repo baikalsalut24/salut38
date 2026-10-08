@@ -36,6 +36,14 @@ function applyFeed() { // лента поставщика + дефекты + с�
   FEED = { t: f.t, im, vd, nm: f.nm, fn: f.fn, pr: f.pr, hd: [...hd], ad: f.ad };
   BASE = BASE0.map(b => ({ ...b, ...(FEED.pr[b.sku] > 0 ? { price: FEED.pr[b.sku] } : {}), ...(FEED.nm[b.sku] ? { name: FEED.nm[b.sku] } : {}), ...(FEED.im[b.sku] ? { img: FEED.im[b.sku] } : {}) })).concat(f.ad.map(a => ({ ...a, ...(FEED.im[a.sku] ? { img: FEED.im[a.sku] } : {}) })));
 }
+let DURC = { m: 0, d: {} };
+function durMap() { // sku -> секунды работы (длина ролика минус 2 с заставки)
+  let m = 0; try { m = fs.statSync(path.join(DATA, 'video-dur.json')).mtimeMs } catch {}
+  if (m !== DURC.m) { DURC = { m, d: load(path.join(DATA, 'video-dur.json'), {}) || {} } }
+  const out = {};
+  for (const k in FEED.vd) { const e = DURC.d[String(FEED.vd[k]).split('/').pop()]; if (e && e.d > 2) out[k] = Math.max(1, e.d - 2) }
+  return out;
+}
 let FEED = { t: 0, im: {}, vd: {}, nm: {}, fn: {}, pr: {}, hd: [], ad: [] }, feedM = 0, feedChk = 0, BASE = BASE0;
 function refreshFeed() {
   const now = Date.now(); if (now - feedChk < 5000) return; feedChk = now;
@@ -230,7 +238,7 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/catalog') { // сайт: что скрыто и какие цены выставлены в приложении
     if (limit('g' + ipOf(req), 120, 60e3)) return send(res, 429, {}, CORS);
     const o = {}; for (const k in cat) { const v = cat[k]; if (v.h || v.p > 0) o[k] = { ...(v.p > 0 ? { p: v.p } : {}), ...(v.h ? { h: 1 } : {}) } }
-    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, im: FEED.im, vd: FEED.vd, nm: FEED.nm, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad.map(a => { const { fin, ...r } = a; return r }) } }, { ...CORS, 'cache-control': 'no-store' });
+    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, im: FEED.im, vd: FEED.vd, du: durMap(), nm: FEED.nm, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad.map(a => { const { fin, ...r } = a; return r }) } }, { ...CORS, 'cache-control': 'no-store' });
   }
 
   if (m === 'GET' && p === '/api/users') return send(res, 200, users.map(pub)); // для экрана входа, без PIN
@@ -340,6 +348,7 @@ async function api(req, res, url) {
       if (limit('u' + me.id, 60, 3600e3)) return send(res, 429, { error: 'Слишком много загрузок, подождите' });
       const fn = 'own-' + tag + '.' + ext; try { fs.mkdirSync(VIDDIR, { recursive: true }); await saveRaw(req, path.join(VIDDIR, fn), 400e6) } catch (e) { return send(res, e.big ? 413 : 400, { error: e.big ? 'Видео больше 400 МБ' : 'Не удалось принять файл' }) }
       await new Promise(r => require('child_process').execFile('ffmpeg', ['-y', '-loglevel', 'error', '-i', path.join(VIDDIR, fn), '-c', 'copy', '-movflags', '+faststart', path.join(VIDDIR, fn + '.fast.mp4')], { timeout: 300e3 }, e => { try { if (!e) fs.renameSync(path.join(VIDDIR, fn + '.fast.mp4'), path.join(VIDDIR, fn)); else fs.unlinkSync(path.join(VIDDIR, fn + '.fast.mp4')) } catch {} r() })); // быстрый старт воспроизведения
+      require('child_process').execFile('node', [path.join(__dirname, 'video-dur.js')], { env: process.env, timeout: 120e3 }, () => {}); // длина ролика
       dropFile(o.vid); o.vid = '/video/' + fn; delete o.okV; o.by = me.name; o.at = now; saveOwn();
       return send(res, 200, defRow(sku, b0));
     }
