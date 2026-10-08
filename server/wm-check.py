@@ -92,13 +92,16 @@ with Pool(2) as pl:
     for n, (kind, sku, f, s_) in enumerate(pl.imap_unordered(job, jobs, chunksize=4), 1):
         cache[kind + ':' + os.path.basename(f)] = [os.path.getsize(f), round(s_, 3)]
         if s_ >= T: bad.setdefault(sku, {})[kind] = 'wm'
-        if n % 100 == 0: print('...проверено', n, 'из', len(jobs), flush=True)
+        if n % 100 == 0:
+            print('...проверено', n, 'из', len(jobs), flush=True)
+            try: json.dump(cache, open(cache_f + '.tmp', 'w')); os.replace(cache_f + '.tmp', cache_f)  # промежуточное сохранение: при сбое проверка продолжится, а не начнётся заново
+            except Exception: pass
 nlow = 0
 for k in ads:
     if own.get(k, {}).get('img') or 'i' in bad.get(k, {}): continue
     m = low_px(os.path.basename(imgs.get(k, '').split('?')[0]))
     if m is not None and m < LOW_PX: bad.setdefault(k, {})['i'] = 'low'; nlow += 1
-json.dump(cache, open(cache_f, 'w'))
+json.dump(cache, open(cache_f + '.tmp', 'w')); os.replace(cache_f + '.tmp', cache_f)
 tmp = os.path.join(DATA, 'defects-auto.json.tmp'); json.dump(bad, open(tmp, 'w'), ensure_ascii=False); os.replace(tmp, os.path.join(DATA, 'defects-auto.json'))
 print('Проверено картинок: %d, видео: %d | дефектных товаров: %d (мелких картинок: %d; порог знака %.2f, мелкая < %d px)' % (len(imgs), len(vids), len(bad), nlow, T, LOW_PX))
 print('Список дефектных товаров: приложение сотрудников → Товары → ⚠ Дефектные → «Скачать таблицу»')
