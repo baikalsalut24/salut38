@@ -765,17 +765,19 @@ function view(){
   document.getElementById('cats').hidden=inList;
   document.getElementById('vlist').hidden=!inList;
   const showSubs=cat===SUBCAT&&sub===null&&query==='';
-  document.getElementById('subs').hidden=!showSubs;document.getElementById('grid').hidden=showSubs;document.querySelector('#vlist .tools').hidden=showSubs;
+  document.getElementById('subs').hidden=!showSubs;document.getElementById('grid').hidden=showSubs;document.querySelector('#vlist .tools').hidden=showSubs||!SORTCATS.includes(cat);
   document.getElementById('pager').hidden=showSubs;
   document.getElementById('vtitle').textContent=cat!==null?cat:'Результаты поиска';
   document.getElementById('back').style.display=cat!==null?'':'none';
   document.getElementById('crumbs').innerHTML=cat===null?'':'<button type="button" data-cr="home">Каталог</button><i>›</i>'+(sub!==null?'<button type="button" data-cr="cat">'+esc(cat)+'</button><i>›</i><span>'+esc(SUBS[sub].t)+'</span>':'<span>'+esc(cat)+'</span>');
 }
+const SORTCATS=['Батареи салютов','Римские свечи']; /* сортировка по калибру и залпам есть только у этих категорий */
 function filtered(){
   let l=PRODUCTS.filter(p=>(cat===null||p.cats.includes(cat))&&(sub===null||cat!==SUBCAT||(p.price>SUBS[sub].lo&&p.price<=SUBS[sub].hi))&&(!query||p._s.includes(query)));
   const calMax=p=>{const m=String(p.cal||'').replace(/,/g,'.').match(/\d+(\.\d+)?/g);return m?Math.max.apply(null,m.map(Number)):0};
-  if(sort==='cal')l=l.slice().sort((a,b)=>calMax(b)-calMax(a)||a.price-b.price||(a.i-b.i));
-  else if(sort==='shots')l=l.slice().sort((a,b)=>(b.shots||0)-(a.shots||0)||a.price-b.price||(a.i-b.i));
+  const sortNow=SORTCATS.includes(cat)?sort:'asc';
+  if(sortNow==='cal')l=l.slice().sort((a,b)=>calMax(b)-calMax(a)||a.price-b.price||(a.i-b.i));
+  else if(sortNow==='shots')l=l.slice().sort((a,b)=>(b.shots||0)-(a.shots||0)||a.price-b.price||(a.i-b.i));
   else l=l.slice().sort((a,b)=>a.price-b.price||(a.i-b.i));
   return l;
 }
