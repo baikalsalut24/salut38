@@ -146,6 +146,24 @@ async function main() {
     no.forEach(it => log('  БЕЗ СЛОВА «финал»: ' + it.art + ' | about: ' + String(it.about).replace(/\r?\n/g, ' ¶ ').slice(0, 300)));
     return;
   }
+  if (process.argv.includes('--bsnf')) { // как у поставщика связаны артикулы БС (внутренний) и НФ (сертификат): одна и та же продукция под двумя кодами?
+    const inB = new Set(base.map(b => b.sku)), nzn = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
+    const codeIn = n => (String(n).match(/\((?:БС|НФ)\s?-?\d+[^)]*\)/gi) || []).map(x => x.slice(1, -1));
+    const rows = list.filter(it => /^(БС|НФ)/i.test(String(it.art || '').trim()) || codeIn(it.name).length);
+    log('Строк с кодами БС/НФ (в артикуле или в названии):', rows.length, 'из', list.length);
+    const A = rows.filter(it => /^НФ/i.test(String(it.art).trim()) && codeIn(it.name).some(c => /^БС/i.test(c)));
+    const B = rows.filter(it => /^БС/i.test(String(it.art).trim()) && codeIn(it.name).some(c => /^НФ/i.test(c)));
+    log('Артикул НФ, а в названии код БС:', A.length, '| артикул БС, а в названии код НФ:', B.length);
+    const g = new Map(); rows.forEach(it => { const k = nzn(it.name); if (k) (g.get(k) || g.set(k, []).get(k)).push(it); });
+    const multi = [...g.values()].filter(v => new Set(v.map(x => String(x.art).trim())).size > 1);
+    log('Товаров (по названию), которые встречаются под РАЗНЫМИ артикулами:', multi.length);
+    const fmt = it => String(it.art).trim() + (inB.has(String(it.art).trim()) ? '[на сайте]' : '') + ' ост:' + stockOf(it.sklad) + ' ' + it.price_roz + ' ' + JSON.stringify(codeIn(it.name));
+    multi.slice(0, 30).forEach(v => log('  «' + String(v[0].name).replace(/\s*\(.*$/, '').slice(0, 30) + '»: ' + v.map(fmt).join('  ||  ')));
+    A.slice(0, 15).forEach(it => log('  НФ→БС: ' + fmt(it) + ' | ' + String(it.name).slice(0, 50)));
+    B.slice(0, 15).forEach(it => log('  БС→НФ: ' + fmt(it) + ' | ' + String(it.name).slice(0, 50)));
+    const same = base.filter(b => /^(БС|НФ)/i.test(b.sku)).length; log('На нашем сайте карточек с артикулом БС/НФ (старый каталог):', same);
+    return;
+  }
   if (showArg) { list.filter(it => String(it.art || '').trim() === showArg).forEach(it => log('СТРОКА:', JSON.stringify({ id: it.id, art: it.art, name: it.name, станет: cleanName(it.name, it.art), cat: it.category_name, price_roz: it.price_roz, unit_count: it.unit_count, sklad: it.sklad, prod: it.prod, img: it.img, video: it.video_mp4, финал: finOf(it), ВСЕ_ПОЛЯ: it }))); return; }
   // у поставщика один артикул бывает у разных товаров (например, «Хоровод» НФ7040 и «Сибирское золото» БС711): строку выбираем по названию
   const nz = t => String(t || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-zа-яё0-9]+/g, '');
