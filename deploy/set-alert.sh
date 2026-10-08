@@ -4,6 +4,7 @@
 set -euo pipefail
 [ "$(id -u)" -ne 0 ] && { echo "Запустите от root"; exit 1; }
 setkey() { sed -i "/^$1=/d" /etc/bs.env; printf '%s=%s\n' "$1" "$2" >> /etc/bs.env; }
+[ -f /etc/bs.env ] && . /etc/bs.env
 MAXA=https://platform-api.max.ru
 read -rp "Канал: 1 — MAX (рекомендуется), 2 — Telegram [1]: " K; K=${K:-1}
 read -rsp "Токен служебного бота (не виден): " T; echo
@@ -32,7 +33,7 @@ else
   read -rp "Ваш chat id (число): " C
   case "$C" in ''|*[!0-9-]*) echo "chat id должен быть числом"; exit 1;; esac
   CH=telegram
-  R=$(curl -s -m 15 "https://api.telegram.org/bot$T/sendMessage" --data-urlencode "chat_id=$C" --data-urlencode "text=✅ Байкал Салют: служебный бот подключён.") || true
+  R=$(curl -s -m 15 "${TG_API:-https://api.telegram.org}/bot$T/sendMessage" --data-urlencode "chat_id=$C" --data-urlencode "text=✅ Байкал Салют: служебный бот подключён.") || true
   echo "$R" | grep -q '"ok":true' || { echo "Telegram с сервера недоступен или токен неверный."; exit 1; }
 fi
 setkey ALERT_TOKEN "$T"; setkey ALERT_CHAT "$C"; setkey ALERT_CHANNEL "$CH"; chmod 600 /etc/bs.env

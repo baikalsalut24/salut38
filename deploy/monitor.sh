@@ -20,7 +20,7 @@ send() { logger -t bs-monitor "$1"; [ -n "${ALERT_TOKEN:-}" ] && [ -n "${ALERT_C
   if [ "${ALERT_CHANNEL:-telegram}" = max ]; then
     curl -s -m 15 -X POST "${MAX_API:-https://platform-api.max.ru}/messages?chat_id=$ALERT_CHAT" -H "Authorization: $ALERT_TOKEN" -H 'Content-Type: application/json' -d "$(python3 -c 'import json,sys;print(json.dumps({"text":sys.argv[1]}))' "$1")" >/dev/null
   else
-    curl -s -m 15 "https://api.telegram.org/bot$ALERT_TOKEN/sendMessage" --data-urlencode "chat_id=$ALERT_CHAT" --data-urlencode "text=$1" >/dev/null
+    curl -s -m 15 "${TG_API:-https://api.telegram.org}/bot$ALERT_TOKEN/sendMessage" --data-urlencode "chat_id=$ALERT_CHAT" --data-urlencode "text=$1" >/dev/null
   fi; }
 if [ -n "$msg" ]; then
   # то же самое повторно — не чаще раза в 3 часа
