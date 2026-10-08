@@ -450,6 +450,16 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 .card .hit{top:8px;left:8px;font-size:12px;padding:4px 11px}
 .card .vbtn{left:6px;bottom:6px;font-size:11px;padding:4px 9px 4px 5px}
 @media(min-width:700px){.grid{gap:12px}.card .info{padding:10px 11px 11px}}
+/* сортировка: закреплена, уменьшается при прокрутке вниз */
+.tools{position:sticky;top:var(--hh,56px);z-index:20;margin:0 -18px 14px;padding:8px 18px;background:var(--bg);border-bottom:1px solid var(--line);transition:padding .2s}
+.tools .sortrow{gap:8px}
+.sortbtns{display:flex;gap:6px;flex:1;justify-content:flex-end}
+.sortbtns button{flex:1 1 0;max-width:96px;padding:9px 4px;border-radius:12px;background:var(--panel);border:1px solid var(--line);color:var(--text);font-weight:800;font-size:13px;white-space:nowrap;transition:padding .2s,font-size .2s}
+.sortbtns button.on{background:var(--yellow);border-color:var(--yellow);color:#111}
+.tools #cnt{flex:none;white-space:nowrap;font-size:12px;transition:opacity .2s,max-width .2s;max-width:120px;overflow:hidden}
+.tools.mini{padding:4px 18px;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.tools.mini .sortbtns button{padding:5px 4px;font-size:12px;border-radius:9px}
+.tools.mini #cnt{opacity:0;max-width:0}
 </style>
 <script>window.ORDER_URL='__ORDER_URL__'</script>
 <script>function lt(el,n){const d=document.createElement('span');d.textContent=n;el.replaceWith(d)}</script>
@@ -548,7 +558,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
       <div class="subs" id="subs" hidden></div>
       <div class="tools">
         <div class="sortrow"><span id="cnt"></span>
-          <select id="sort" aria-label="Сортировка"><option value="asc">Сначала дешёвые</option><option value="desc">Сначала дорогие</option><option value="pop">Сначала популярные</option></select></div>
+          <div class="sortbtns" id="sortbtns" role="group" aria-label="Сортировка"><button type="button" data-s="asc" class="on" aria-pressed="true">Цена ↑</button><button type="button" data-s="cal" aria-pressed="false">Калибр ↓</button><button type="button" data-s="shots" aria-pressed="false">Залпы ↓</button></div></div>
       </div>
       <div class="grid" id="grid"></div>
       <div class="pager" id="pager"></div>
@@ -763,8 +773,9 @@ function view(){
 }
 function filtered(){
   let l=PRODUCTS.filter(p=>(cat===null||p.cats.includes(cat))&&(sub===null||cat!==SUBCAT||(p.price>SUBS[sub].lo&&p.price<=SUBS[sub].hi))&&(!query||p._s.includes(query)));
-  if(sort==='desc')l=l.slice().sort((a,b)=>b.price-a.price);
-  else if(sort==='pop')l=l.slice().sort((a,b)=>(b.hit-a.hit)||(a.i-b.i));
+  const calMax=p=>{const m=String(p.cal||'').replace(/,/g,'.').match(/\d+(\.\d+)?/g);return m?Math.max.apply(null,m.map(Number)):0};
+  if(sort==='cal')l=l.slice().sort((a,b)=>calMax(b)-calMax(a)||a.price-b.price||(a.i-b.i));
+  else if(sort==='shots')l=l.slice().sort((a,b)=>(b.shots||0)-(a.shots||0)||a.price-b.price||(a.i-b.i));
   else l=l.slice().sort((a,b)=>a.price-b.price||(a.i-b.i));
   return l;
 }
@@ -783,7 +794,7 @@ function renderGrid(){
 /* страницы каталога: адрес вида #catalog/Фонтаны/-/2, кнопка «Назад» в браузере работает */
 function hashOf(){return cat===null?'#catalog':'#catalog/'+encodeURIComponent(cat)+'/'+(sub===null?'-':sub)+'/'+page}
 function parseHash(){const m=location.hash.match(/^#catalog\/([^/]+)\/(-|\d+)\/(\d+)$/);if(!m)return null;let c;try{c=decodeURIComponent(m[1])}catch(e){return null}if(!CNT[c])return null;const s=m[2]==='-'?null:+m[2];if(s!==null&&(c!==SUBCAT||!SUBS[s]))return null;return{c,s,p:Math.max(1,+m[3])}}
-function nav(c,s,p,keepSort){cat=c;sub=s;page=p||1;query='';if(!keepSort){sort='asc';document.getElementById('sort').value='asc'}
+function nav(c,s,p,keepSort){cat=c;sub=s;page=p||1;query='';if(!keepSort){sort='asc';setSortUi()}
   renderGrid();lastHash=hashOf();try{history.pushState(null,'',lastHash)}catch(e){}
   if(c===null)document.getElementById('catalog').scrollIntoView();else window.scrollTo(0,0)}
 function onHash(){if(location.hash===lastHash)return;const st=parseHash();lastHash=location.hash;
@@ -1027,7 +1038,12 @@ document.addEventListener('change',e=>{if(e.target.id==='fd'){fillIv();}if(e.tar
 $('veil').addEventListener('click',()=>openCart(false));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')openCart(false)});
 
-$('sort').addEventListener('change',e=>{sort=e.target.value;page=1;renderGrid();try{history.replaceState(null,'',hashOf());lastHash=hashOf()}catch(er){}});
+function setSortUi(){document.querySelectorAll('#sortbtns [data-s]').forEach(function(b){var on=b.dataset.s===sort;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false')})}
+$('sortbtns').addEventListener('click',function(e){var b=e.target.closest('[data-s]');if(!b||b.dataset.s===sort)return;sort=b.dataset.s;page=1;setSortUi();renderGrid();try{history.replaceState(null,'',hashOf());lastHash=hashOf()}catch(er){}});
+/* панель сортировки закреплена под шапкой, при прокрутке вниз уменьшается */
+(function(){var hd=document.querySelector('header'),tl=document.querySelector('#vlist .tools'),last=window.scrollY;
+  function hh(){document.documentElement.style.setProperty('--hh',(hd?hd.offsetHeight:56)+'px')}hh();addEventListener('resize',hh);
+  addEventListener('scroll',function(){var y=window.scrollY;if(!tl)return;if(y>160&&y>last+2)tl.classList.add('mini');else if(y<last-2||y<100)tl.classList.remove('mini');last=y},{passive:true})})();
 
 
 
