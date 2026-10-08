@@ -206,11 +206,11 @@ async function main() {
     ad.push({ sku: c.art, name: cleanName(c.it.name, c.it.art) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img) });
   });
   // Созданные ранее карточки не пропадают, когда товар закончился у поставщика: они скрываются на сайте (hd) и возвращаются, когда товар снова в наличии.
-  // Удаляем только дефектные (водяной знак / мелкая картинка), которые вы не исправили, когда товар закончился.
+  // Удаляем только с водяным знаком (мелкая картинка — жёлтый статус, такие карточки лишь скрываем), которые вы не исправили, когда товар закончился.
   const CARDF = path.join(DATA, 'cards.json');
   let store = load(CARDF, null); if (!store) { store = {}; (prev && prev.ad || []).forEach(a => { store[a.sku] = a; }); }
   const dAuto = load(path.join(DATA, 'defects-auto.json'), {}), dOwn = load(path.join(DATA, 'media-own.json'), {});
-  const dOpen = k => { const a = dAuto[k]; if (!a) return false; const o = dOwn[k] || {}; return !!((a.i && !o.img && !o.okI) || (a.v && !o.vid && !o.okV)); };
+  const dOpen = k => { const a = dAuto[k]; if (!a) return false; const o = dOwn[k] || {}; return !!((a.i === 'wm' && !o.img && !o.okI) || (a.v && !o.vid && !o.okV)); };
   const curAd = new Set(ad.map(a => a.sku)); let keptHidden = 0, dropped = 0;
   for (const k of Object.keys(store)) {
     if (curAd.has(k)) continue;

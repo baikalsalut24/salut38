@@ -27,12 +27,12 @@ const FEEDF = path.join(DATA, 'feed.json');
 const AUTOF = path.join(DATA, 'defects-auto.json'), OWNF = path.join(DATA, 'media-own.json');
 const IMGDIR = process.env.IMG_DIR || '/var/www/salut38/img', VIDDIR = process.env.VIDEO_DIR || '/var/www/salut38/video', RAWDIR = process.env.IMG_RAW_DIR || path.join(DATA, 'img-orig');
 let AUTO = {}, autoM = 0, OWN = load(OWNF, {}), RAWFEED = null;
-const defectOf = sku => { const a = AUTO[sku]; if (!a) return null; const o = OWN[sku] || {}; const ni = !!a.i && !o.img && !o.okI, nv = !!a.v && !o.vid && !o.okV; return ni || nv ? { ni, nv, ri: a.i || '', rv: a.v || '' } : null };
+const defectOf = sku => { const a = AUTO[sku]; if (!a) return null; const o = OWN[sku] || {}; const ni = !!a.i && !o.img && !o.okI, nv = !!a.v && !o.vid && !o.okV; return ni || nv ? { ni, nv, ri: a.i || '', rv: a.v || '', hide: (ni && a.i === 'wm') || (nv && a.v === 'wm') } : null };
 function applyFeed() { // лента поставщика + дефекты + свои фото/видео
   const f = RAWFEED; if (!f) return;
   const im = { ...f.im }, vd = { ...f.vd }, hd = new Set(f.hd);
   for (const k in OWN) { if (OWN[k].img) im[k] = OWN[k].img; if (OWN[k].vid) vd[k] = OWN[k].vid }
-  for (const k in AUTO) if (defectOf(k)) hd.add(k);
+  for (const k in AUTO) { const d = defectOf(k); if (d && d.hide) hd.add(k) } // скрываем только водяной знак; мелкая картинка остаётся на сайте (жёлтый светофор)
   FEED = { t: f.t, im, vd, nm: f.nm, fn: f.fn, pr: f.pr, hd: [...hd], ad: f.ad };
   BASE = BASE0.map(b => ({ ...b, ...(FEED.pr[b.sku] > 0 ? { price: FEED.pr[b.sku] } : {}), ...(FEED.nm[b.sku] ? { name: FEED.nm[b.sku] } : {}), ...(FEED.im[b.sku] ? { img: FEED.im[b.sku] } : {}) })).concat(f.ad.map(a => ({ ...a, ...(FEED.im[a.sku] ? { img: FEED.im[a.sku] } : {}) })));
 }
@@ -130,7 +130,7 @@ const saveRaw = (req, file, max) => new Promise((ok, no) => {
 const saveOwn = () => { save(OWNF, OWN); applyFeed() };
 const dropFile = u => { if (!u) return; const f = String(u).split('?')[0].split('/').pop(); if (!/^own-/.test(f)) return; for (const d of [IMGDIR, VIDDIR, RAWDIR]) fs.unlink(path.join(d, f), () => {}) };
 const normImgs = () => new Promise(r => require('child_process').execFile('python3', [path.join(__dirname, 'normalize.py'), IMGDIR, RAWDIR], { timeout: 120e3 }, () => r()));
-const defRow = (sku, b) => { const a = AUTO[sku] || {}, o = OWN[sku] || {}, d = defectOf(sku); return { sku, name: b.name, cat: (b.cats || [])[0] || '', price: b.price, img: FEED.im[sku] || b.img || '', ni: !!(d && d.ni), nv: !!(d && d.nv), ri: a.i || '', rv: a.v || '', ownImg: !!o.img, ownVid: !!o.vid, okI: !!o.okI, okV: !!o.okV, open: !!d, hasVid: !!(FEED.vd[sku]), by: o.by || '', at: o.at || '' } };
+const defRow = (sku, b) => { const a = AUTO[sku] || {}, o = OWN[sku] || {}, d = defectOf(sku); return { sku, name: b.name, cat: (b.cats || [])[0] || '', price: b.price, img: FEED.im[sku] || b.img || '', ni: !!(d && d.ni), nv: !!(d && d.nv), ri: a.i || '', rv: a.v || '', ownImg: !!o.img, ownVid: !!o.vid, okI: !!o.okI, okV: !!o.okV, open: !!d, hide: !!(d && d.hide), hasVid: !!(FEED.vd[sku]), by: o.by || '', at: o.at || '' } };
 
 /* ---------- утилиты ---------- */
 const send = (res, code, body, extra = {}) => { const s = typeof body === 'string' ? body : JSON.stringify(body); res.writeHead(code, { 'content-type': typeof body === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra }); res.end(s) };
