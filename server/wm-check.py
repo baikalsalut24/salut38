@@ -1,5 +1,5 @@
 # Проверка КАЖДОЙ картинки и КАЖДОГО видео на водяной знак поставщика по образцам из wm-templates/*.png
-# Результат: DATA/defects-auto.json (дефектные товары: сервер сам скрывает их на сайте и показывает в приложении), DATA/media-check.csv (таблица)
+# Результат: DATA/defects-auto.json (дефектные товары: сервер сам скрывает их на сайте и показывает в приложении)
 import json, os, sys, csv, subprocess, tempfile, glob, re
 from multiprocessing import Pool
 import cv2, numpy as np
@@ -100,10 +100,5 @@ for k in ads:
     if m is not None and m < LOW_PX: bad.setdefault(k, {})['i'] = 'low'; nlow += 1
 json.dump(cache, open(cache_f, 'w'))
 tmp = os.path.join(DATA, 'defects-auto.json.tmp'); json.dump(bad, open(tmp, 'w'), ensure_ascii=False); os.replace(tmp, os.path.join(DATA, 'defects-auto.json'))
-RS = {'wm': 'водяной знак', 'low': 'низкое качество'}
-with open(os.path.join(DATA, 'media-check.csv'), 'w', encoding='utf-8-sig', newline='') as fh:
-    w = csv.writer(fh, delimiter=';'); w.writerow(['Артикул', 'Название', 'Нужно видео', 'Нужна картинка', 'Причина'])
-    for sku in sorted(bad):
-        v = bad[sku]; w.writerow([sku, names.get(sku, ''), 'да' if 'v' in v else 'нет', 'да' if 'i' in v else 'нет', ', '.join(sorted({RS[x] for x in v.values()}))])
 print('Проверено картинок: %d, видео: %d | дефектных товаров: %d (мелких картинок: %d; порог знака %.2f, мелкая < %d px)' % (len(imgs), len(vids), len(bad), nlow, T, LOW_PX))
-print('Таблица: ' + os.path.join(DATA, 'media-check.csv'))
+print('Список дефектных товаров: приложение сотрудников → Товары → ⚠ Дефектные → «Скачать таблицу»')
