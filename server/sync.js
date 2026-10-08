@@ -159,8 +159,8 @@ async function main() {
     log('Товаров (по названию), которые встречаются под РАЗНЫМИ артикулами:', multi.length);
     const fmt = it => String(it.art).trim() + (inB.has(String(it.art).trim()) ? '[на сайте]' : '') + ' ост:' + stockOf(it.sklad) + ' ' + it.price_roz + ' ' + JSON.stringify(codeIn(it.name));
     multi.slice(0, 30).forEach(v => log('  «' + String(v[0].name).replace(/\s*\(.*$/, '').slice(0, 30) + '»: ' + v.map(fmt).join('  ||  ')));
-    A.slice(0, 15).forEach(it => log('  НФ→БС: ' + fmt(it) + ' | ' + String(it.name).slice(0, 50)));
-    B.slice(0, 15).forEach(it => log('  БС→НФ: ' + fmt(it) + ' | ' + String(it.name).slice(0, 50)));
+    A.slice(0, 40).forEach(it => log('  НФ→БС: ' + fmt(it) + ' | ' + String(it.name).slice(0, 50)));
+    B.slice(0, 40).forEach(it => log('  БС→НФ: ' + fmt(it) + ' | ' + String(it.name).slice(0, 50)));
     const same = base.filter(b => /^(БС|НФ)/i.test(b.sku)).length; log('На нашем сайте карточек с артикулом БС/НФ (старый каталог):', same);
     return;
   }
