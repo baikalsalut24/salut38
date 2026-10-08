@@ -275,6 +275,7 @@ async function main() {
   diffs.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
   log('--- ИТОГ ---');
   log('Товаров в каталоге сайта:', base.length, '| цена та же:', same, '| цена изменится:', diffs.length, '| с финалом:', Object.keys(fnmap).length, '| будут скрыты (нет у поставщика):', hd.length, '| без цены у поставщика (цена не меняется):', noPrice);
+  if (hd.length) log('Скрываются (нет у поставщика в наличии):', hd.slice(0, 60).join(', '));
   log('Новых карточек (в наличии, есть картинка, категория известна):', ad.length || cand.length);
   log('Пропущено новых: нет в наличии', sk.stock, '| нет картинки', sk.noimg, '| неизвестная категория', sk.nocat, '| нет цены', sk.noprice);
   if (Object.keys(sk.cats).length) log('Неизвестные категории:', Object.entries(sk.cats).map(([k, v]) => k + ' ×' + v).join('; '));
