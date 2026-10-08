@@ -2,8 +2,6 @@
 # Отчёт по одной позиции поставщика: что приходит из pyro_goodlist и pyro_good_params -> xlsx
 # Запуск: python3 probe-good.py MC143   (ключи из /etc/bs.env, токен из DATA_DIR)
 import os, sys, json, urllib.request, urllib.parse
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
 art = (sys.argv[1] if len(sys.argv) > 1 else 'MC143').strip()
 D = os.environ.get('DATA_DIR', '/var/lib/bs-data')
 BASE = os.environ.get('SALUT_BASE', 'https://system.salut-1.ru').rstrip('/')
@@ -22,18 +20,19 @@ if not hit: sys.exit('Не найдено: ' + art)
 g = hit[0]
 try: pr = api('/api/1.0/pyro_good_params/', good_id=g['id'])
 except Exception as e: pr = {'error': str(e)}
-wb = Workbook(); H = Font(bold=True, color='FFFFFF'); F = PatternFill('solid', fgColor='1F3A5F')
-def sheet(ws, head, rows, w):
-    ws.append(head)
-    for c in ws[1]: c.font = H; c.fill = F
-    for r in rows: ws.append(r)
-    for i, x in enumerate(w): ws.column_dimensions['ABCDEFG'[i]].width = x
-    for row in ws.iter_rows(min_row=2):
-        for c in row: c.alignment = Alignment(wrap_text=True, vertical='top')
-ws = wb.active; ws.title = 'pyro_goodlist'
-sheet(ws, ['Поле', 'Значение от поставщика'], [[k, json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v] for k, v in g.items()], [22, 80])
-ws2 = wb.create_sheet('pyro_good_params')
-rows = [[p.get('name'), p.get('value'), p.get('unit')] for p in (pr.get('data') or [])] if isinstance(pr, dict) else []
-if not rows: rows = [['(нет данных)', json.dumps(pr, ensure_ascii=False)[:500], '']]
-sheet(ws2, ['Параметр', 'Значение', 'Ед.'], rows, [30, 30, 10])
-wb.save(f'/tmp/{art}-params.xlsx'); print('Готово: /tmp/%s-params.xlsx' % art)
+rows1 = [[k, json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v] for k, v in g.items()]
+rows2 = [[p.get('name'), p.get('value'), p.get('unit')] for p in (pr.get('data') or [])] if isinstance(pr, dict) else []
+if not rows2: rows2 = [['(нет данных)', json.dumps(pr, ensure_ascii=False)[:500], '']]
+print('== pyro_goodlist (' + art + ')')
+for r in rows1: print(' ', r[0], '=', r[1])
+print('== pyro_good_params')
+for r in rows2: print(' ', r[0], '=', r[1], r[2])
+try:
+    from openpyxl import Workbook
+    wb = Workbook(); ws = wb.active; ws.title = 'pyro_goodlist'; ws.append(['Поле', 'Значение'])
+    for r in rows1: ws.append(r)
+    w2 = wb.create_sheet('pyro_good_params'); w2.append(['Параметр', 'Значение', 'Ед.'])
+    for r in rows2: w2.append(r)
+    wb.save(f'/tmp/{art}-params.xlsx'); print('xlsx: /tmp/%s-params.xlsx' % art)
+except ImportError:
+    print('(xlsx не создан: нет openpyxl; данные выше)')
