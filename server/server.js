@@ -339,6 +339,7 @@ async function api(req, res, url) {
       if (!ext) return send(res, 400, { error: 'Нужно видео MP4 или WebM' });
       if (limit('u' + me.id, 60, 3600e3)) return send(res, 429, { error: 'Слишком много загрузок, подождите' });
       const fn = 'own-' + tag + '.' + ext; try { fs.mkdirSync(VIDDIR, { recursive: true }); await saveRaw(req, path.join(VIDDIR, fn), 400e6) } catch (e) { return send(res, e.big ? 413 : 400, { error: e.big ? 'Видео больше 400 МБ' : 'Не удалось принять файл' }) }
+      await new Promise(r => require('child_process').execFile('ffmpeg', ['-y', '-loglevel', 'error', '-i', path.join(VIDDIR, fn), '-c', 'copy', '-movflags', '+faststart', path.join(VIDDIR, fn + '.fast.mp4')], { timeout: 300e3 }, e => { try { if (!e) fs.renameSync(path.join(VIDDIR, fn + '.fast.mp4'), path.join(VIDDIR, fn)); else fs.unlinkSync(path.join(VIDDIR, fn + '.fast.mp4')) } catch {} r() })); // быстрый старт воспроизведения
       dropFile(o.vid); o.vid = '/video/' + fn; delete o.okV; o.by = me.name; o.at = now; saveOwn();
       return send(res, 200, defRow(sku, b0));
     }
