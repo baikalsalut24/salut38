@@ -351,7 +351,7 @@ async function api(req, res, url) {
   if (p === '/api/catalog') { // все товары: видимость на сайте и цена
     refreshFeed();
     if (!isM) return send(res, 403, { error: 'Только менеджер' });
-    if (m === 'GET') return send(res, 200, BASE.map(b => { const o = cat[b.sku] || {}; return { sku: b.sku, name: b.name, cats: b.cats, brand: b.brand, img: FEED.im[b.sku] || b.img, v: b.v, defect: defectOf(b.sku) || null, nostock: FEED.hd.includes(b.sku), own: AUTO[b.sku] && OWN[b.sku] ? { img: !!OWN[b.sku].img, vid: !!OWN[b.sku].vid, okI: !!OWN[b.sku].okI, okV: !!OWN[b.sku].okV } : null, base: b.price, price: o.p > 0 ? o.p : b.price, custom: o.p > 0, hidden: !!o.h } }));
+    if (m === 'GET') return send(res, 200, BASE.map(b => { const o = cat[b.sku] || {}; return { sku: b.sku, name: b.name, cats: b.cats, brand: b.brand, img: FEED.im[b.sku] || b.img, vid: FEED.vd[b.sku] || '', v: b.v, defect: defectOf(b.sku) || null, nostock: FEED.hd.includes(b.sku), own: AUTO[b.sku] && OWN[b.sku] ? { img: !!OWN[b.sku].img, vid: !!OWN[b.sku].vid, okI: !!OWN[b.sku].okI, okV: !!OWN[b.sku].okV } : null, base: b.price, price: o.p > 0 ? o.p : b.price, custom: o.p > 0, hidden: !!o.h } }));
     if (m === 'PATCH') {
       const b = await body(req).catch(() => ({})), skus = (Array.isArray(b.skus) ? b.skus : [b.sku]).map(x => clean(x, 40)).filter(x => BASE.some(i => i.sku === x)).slice(0, 800);
       if (!skus.length) return send(res, 404, { error: 'Товар не найден' });

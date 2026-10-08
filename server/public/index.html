@@ -107,14 +107,14 @@ textarea.note{min-height:80px;resize:vertical}
 .pc .ds{margin-top:6px;font-weight:800}.pc .mt{margin-top:3px;color:var(--muted);font-size:13px;font-weight:600}
 .pc .bt{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.pc .bt button{background:#EEF1F8;border-radius:9px;padding:8px 11px;font-weight:800;font-size:12px}.pc .bt button.d{color:var(--r)}
 .cdq{display:flex;align-items:center;gap:6px}.cdq button{width:32px;height:32px;border-radius:9px;background:#EEF1F8;font-weight:900;font-size:16px}.pill.unp{background:#FDE3E3;color:#B01818}
-.cr{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:9px;margin-bottom:8px}.cr img{width:54px;height:54px;object-fit:contain;border-radius:8px;background:#F3F5FA;flex:none}.cr .ci{flex:1;min-width:0}.cr .ci b{display:block;font-size:14px;line-height:1.2}.cr small{color:var(--muted);font-weight:600;font-size:12px;display:block}.cr .cc{display:flex;align-items:center;gap:6px;margin-top:5px}.cr .cp{width:96px;padding:7px 9px;font-size:15px;font-weight:800}.cr .cc button{width:28px;height:28px;border-radius:8px;background:#EEF1F8}.cr.hid{opacity:.6}.eye{flex:none;padding:8px 10px;border-radius:10px;font-weight:800;font-size:12px;background:#FDE3E3;color:#B01818}.eye.on{background:#E3F5EA;color:#14703C}
+.cr{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:9px;margin-bottom:8px}.cr img{width:54px;height:54px;object-fit:contain;border-radius:8px;background:#F3F5FA;flex:none}.cr .ci{flex:1;min-width:0}.cr{cursor:pointer}.cr .ci b{display:block;font-size:14px;line-height:1.2}.cr small{color:var(--muted);font-weight:600;font-size:12px;display:block}.cr .cc{display:flex;align-items:center;gap:6px;margin-top:5px}.cr .cp{width:96px;padding:7px 9px;font-size:15px;font-weight:800}.cr .cc button{width:28px;height:28px;border-radius:8px;background:#EEF1F8}.cr.hid{opacity:.6}.eye{flex:none;padding:8px 10px;border-radius:10px;font-weight:800;font-size:12px;background:#FDE3E3;color:#B01818}.eye.on{background:#E3F5EA;color:#14703C}
 .pill.urgent{background:#FDE3E3;color:#B01818;font-weight:900}
 .pill.card{background:#E8F0FF;color:#1D4FA8}
 .pf{display:grid;gap:8px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:12px}
 .pf .two{display:grid;grid-template-columns:1fr auto;gap:8px}.pf .two button{background:#EEF1F8;border-radius:12px;padding:0 14px;font-weight:800;font-size:13px}
 .pf label{font-size:12px;font-weight:800;color:var(--muted);margin-bottom:-4px}
 .dchip.on{background:#E5121B;color:#fff}.dchip{color:#B42318}
-.cr{flex-wrap:wrap}.df{flex:1 0 100%;background:#FFF4E5;border:1px solid #F5C77E;border-radius:10px;padding:8px 10px;margin-top:6px}.df.ok{background:#EAF7EF;border-color:#9AD6B0}
+.cr{flex-wrap:wrap}.sb .df{margin:0 0 10px}.df{flex:1 0 100%;background:#FFF4E5;border:1px solid #F5C77E;border-radius:10px;padding:8px 10px;margin-top:6px}.df.ok{background:#EAF7EF;border-color:#9AD6B0}
 .df .dt{font-size:12.5px;font-weight:700;line-height:1.3}.df .db{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .dbtn{background:var(--y);color:#111;font-weight:800;font-size:13px;padding:9px 12px;border-radius:10px}.dbtn.g{background:#fff;border:1px solid var(--line);color:var(--text)}.dbtn:disabled{opacity:.6}
 </style>
@@ -358,10 +358,29 @@ function drawCarts(){const mn=$('#mn');
 
 
 /* ---------- товары: видимость на сайте и цена ---------- */
-let CAT=null,catQ='',catC='',catHid=false,catDef=false,catN=60;
-async function loadCatalog(){try{CAT=await api('/api/catalog');if(tab==='catalog'){$('#cl')?catRender():drawCatalog()}}catch(e){toast(e.error,true)}}
+const SITE=location.origin.replace('//app.','//'),absU=u=>u?(/^https?:/.test(u)?u:SITE+u):'';
+let CAT=null,catOpen='',catQ='',catC='',catHid=false,catDef=false,catN=60;
+async function loadCatalog(){try{CAT=await api('/api/catalog');if(tab==='catalog'){$('#cl')?catRender():drawCatalog()}if(catOpen&&$('#catbg'))catSheet(catOpen)}catch(e){toast(e.error,true)}}
 function catList(){let l=CAT||[];if(catC)l=l.filter(p=>p.cats.includes(catC));if(catHid)l=l.filter(p=>p.hidden);if(catDef)l=l.filter(p=>p.defect);if(catQ){const s=catQ.toLowerCase();l=l.filter(p=>(p.name+' '+p.sku+' '+p.brand).toLowerCase().includes(s))}return l}
-function catRow(p){return `<div class="cr${p.hidden?' hid':''}" data-sku="${esc(p.sku)}"><img loading="lazy" src="${esc(p.img||'')}" alt="" onerror="this.style.visibility='hidden'"><div class="ci"><b>${esc(p.name)}</b><small>${esc(p.sku)} · ${esc(p.cats[0]||'')}${p.custom?' · поставщик '+rub(p.base):''}</small><div class="cc"><input class="f cp" inputmode="numeric" value="${p.price}" data-cpi="${esc(p.sku)}" aria-label="Цена"><span>₽</span>${p.custom?`<button data-crs="${esc(p.sku)}" title="Вернуть цену поставщика">↺</button>`:''}</div></div><button class="eye ${p.hidden||p.defect||p.nostock?'':'on'}" data-eye="${esc(p.sku)}">${p.defect?'Дефект':p.hidden?'Скрыт':p.nostock?'Нет в наличии':'На сайте'}</button>${defPanel(p)}</div>`}
+
+function catSheet(sku){const p=(CAT||[]).find(x=>x.sku===sku);if(!p)return;catOpen=sku;
+  let bg=$('#catbg');if(!bg){bg=document.createElement('div');bg.className='sheet-bg';bg.id='catbg';bg.style.zIndex=25;document.body.appendChild(bg);
+    bg.onclick=async e=>{if(e.target===bg||e.target.id==='cbx'){catOpen='';return bg.remove()}const t=e.target.closest('button');if(!t)return;try{await catAct(t)}catch(er){toast(er.error||'Ошибка',true)}}}
+  const st=p.defect?'<span class="pill warn">Дефект: скрыт на сайте</span>':p.hidden?'<span class="pill warn">Скрыт вручную</span>':p.nostock?'<span class="pill warn">Нет в наличии у поставщика</span>':'<span class="pill ok">На сайте</span>';
+  const vid=absU(p.vid);
+  bg.innerHTML=`<div class="sheet"><div class="sh"><h3>${esc(p.name)}</h3><button class="x" id="cbx">×</button></div><div class="sb">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${st}<span class="pill">${esc(p.sku)}</span><span class="pill">${esc(p.cats[0]||'')}</span><span class="pill">${rub(p.price)}</span></div>
+    ${defPanel(p)}
+    <div class="box"><h4>Картинка</h4>${p.img?`<img src="${esc(absU(p.img))}" alt="" style="width:100%;max-height:60vh;object-fit:contain;background:#fff;border-radius:10px;border:1px solid var(--line)">`:'<div class="empty">Картинки нет</div>'}
+      <button class="dbtn" data-dup="${esc(sku)}:img" style="margin-top:8px;width:100%">📷 Заменить фото</button></div>
+    <div class="box"><h4>Видео</h4>${vid?`<video src="${esc(vid)}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;background:#000;border-radius:10px"></video>`:'<div class="empty">Видео нет</div>'}
+      <button class="dbtn" data-dup="${esc(sku)}:vid" style="margin-top:8px;width:100%">🎬 ${vid?'Заменить':'Загрузить'} видео</button></div>
+  </div></div>`}
+async function catAct(t){
+  if(t.dataset.dup){const [k,kind]=t.dataset.dup.split(':');defPick(k,kind,t)}
+  else if(t.dataset.dok){const [k,kind]=t.dataset.dok.split(':');if(confirm('Показывать товар на сайте с текущей '+(kind==='i'?'картинкой':'видео')+'?')){await api('/api/defects/'+encodeURIComponent(k)+'/ok',{method:'POST',body:{kind,value:true}});toast('Товар вернётся на сайт',false,true);await loadCatalog()}}
+  else if(t.dataset.dreset){if(confirm('Убрать своё фото/видео и снова считать товар дефектным?')){await api('/api/defects/'+encodeURIComponent(t.dataset.dreset)+'/reset',{method:'POST',body:{}});await loadCatalog()}}}
+function catRow(p){return `<div class="cr${p.hidden?' hid':''}" data-sku="${esc(p.sku)}"><img loading="lazy" src="${esc(absU(p.img))}" alt="" onerror="this.style.visibility='hidden'"><div class="ci"><b>${esc(p.name)}</b><small>${esc(p.sku)} · ${esc(p.cats[0]||'')}${p.custom?' · поставщик '+rub(p.base):''}</small><div class="cc"><input class="f cp" inputmode="numeric" value="${p.price}" data-cpi="${esc(p.sku)}" aria-label="Цена"><span>₽</span>${p.custom?`<button data-crs="${esc(p.sku)}" title="Вернуть цену поставщика">↺</button>`:''}</div></div><button class="eye ${p.hidden||p.defect||p.nostock?'':'on'}" data-eye="${esc(p.sku)}">${p.defect?'Дефект':p.hidden?'Скрыт':p.nostock?'Нет в наличии':'На сайте'}</button>${defPanel(p)}</div>`}
 const DR={wm:'водяной знак поставщика',low:'низкое качество картинки'};
 function defPanel(p){const d=p.defect,k=esc(p.sku);
   if(d){const b=[];if(d.ni)b.push(`<button class="dbtn" data-dup="${k}:img">📷 Фото</button><button class="dbtn g" data-dok="${k}:i">Оставить картинку</button>`);if(d.nv)b.push(`<button class="dbtn" data-dup="${k}:vid">🎬 Видео</button><button class="dbtn g" data-dok="${k}:v">Оставить видео</button>`);
@@ -391,15 +410,13 @@ function drawCatalog(){const mn=$('#mn');if($('#cl'))return;
   catRender();
   $('#cq').oninput=e=>{catQ=e.target.value.trim();catN=60;catRender()};
   mn.onchange=async e=>{const i=e.target.closest('[data-cpi]');if(!i)return;try{catPut(await api('/api/catalog',{method:'PATCH',body:{sku:i.dataset.cpi,price:i.value}}));toast('Цена сохранена',false,true)}catch(er){toast(er.error,true);const p=CAT.find(x=>x.sku===i.dataset.cpi);if(p)i.value=p.price}};
-  mn.onclick=async e=>{const t=e.target.closest('button');if(!t)return;
+  mn.onclick=async e=>{const t=e.target.closest('button');if(!t){const r=e.target.closest('.cr');if(r&&!e.target.closest('input'))catSheet(r.dataset.sku);return}
     try{
       if(t.dataset.cc!==undefined){catC=t.dataset.cc;catN=60;catRender()}
       else if(t.id==='chid'){catHid=!catHid;catN=60;catRender()}
       else if(t.id==='cdef'){catDef=!catDef;catN=60;catRender()}
       else if(t.id==='cdcsv')defCsv();
-      else if(t.dataset.dup){const [k,kind]=t.dataset.dup.split(':');defPick(k,kind,t)}
-      else if(t.dataset.dok){const [k,kind]=t.dataset.dok.split(':');if(confirm('Показывать товар на сайте с текущей '+(kind==='i'?'картинкой':'видео')+'?')){await api('/api/defects/'+encodeURIComponent(k)+'/ok',{method:'POST',body:{kind,value:true}});toast('Товар вернётся на сайт',false,true);await loadCatalog()}}
-      else if(t.dataset.dreset){if(confirm('Убрать своё фото/видео и снова считать товар дефектным?')){await api('/api/defects/'+encodeURIComponent(t.dataset.dreset)+'/reset',{method:'POST',body:{}});await loadCatalog()}}
+      else if(t.dataset.dup||t.dataset.dok||t.dataset.dreset)await catAct(t)
       else if(t.id==='cmore'){catN+=60;catRender()}
       else if(t.dataset.eye){const p=CAT.find(x=>x.sku===t.dataset.eye);if(p.defect)return toast('Товар дефектный: загрузите своё фото/видео или нажмите «Оставить»',true);catPut(await api('/api/catalog',{method:'PATCH',body:{sku:p.sku,hidden:!p.hidden}}));toast(p.hidden?'Скрыт на сайте':'Показывается на сайте',false,true)}
       else if(t.dataset.crs){catPut(await api('/api/catalog',{method:'PATCH',body:{sku:t.dataset.crs,price:null}}));toast('Цена поставщика возвращена',false,true)}
