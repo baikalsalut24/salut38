@@ -23,13 +23,29 @@ let orders = load(F.orders, {}), users = load(F.users, null), sessions = load(F.
 const BASE0 = load(path.join(__dirname, 'catalog.json'), []); // базовый каталог (файл catalog.json)
 // Выгрузка поставщика (САЛЮТ-1): цены, скрытые товары и новые карточки. Пишет sync.js в DATA/feed.json
 const FEEDF = path.join(DATA, 'feed.json');
+// Дефекты медиа: DATA/defects-auto.json пишет проверка (wm-check.py): {sku:{i:'wm'|'low',v:'wm'}}; свои фото/видео из приложения — DATA/media-own.json
+const AUTOF = path.join(DATA, 'defects-auto.json'), OWNF = path.join(DATA, 'media-own.json');
+const IMGDIR = process.env.IMG_DIR || '/var/www/salut38/img', VIDDIR = process.env.VIDEO_DIR || '/var/www/salut38/video', RAWDIR = process.env.IMG_RAW_DIR || path.join(DATA, 'img-orig');
+let AUTO = {}, autoM = 0, OWN = load(OWNF, {}), RAWFEED = null;
+const defectOf = sku => { const a = AUTO[sku]; if (!a) return null; const o = OWN[sku] || {}; const ni = !!a.i && !o.img && !o.okI, nv = !!a.v && !o.vid && !o.okV; return ni || nv ? { ni, nv, ri: a.i || '', rv: a.v || '' } : null };
+function applyFeed() { // лента поставщика + дефекты + свои фото/видео
+  const f = RAWFEED; if (!f) return;
+  const im = { ...f.im }, vd = { ...f.vd }, hd = new Set(f.hd);
+  for (const k in OWN) { if (OWN[k].img) im[k] = OWN[k].img; if (OWN[k].vid) vd[k] = OWN[k].vid }
+  for (const k in AUTO) if (defectOf(k)) hd.add(k);
+  FEED = { t: f.t, im, vd, nm: f.nm, fn: f.fn, pr: f.pr, hd: [...hd], ad: f.ad };
+  BASE = BASE0.map(b => ({ ...b, ...(FEED.pr[b.sku] > 0 ? { price: FEED.pr[b.sku] } : {}), ...(FEED.nm[b.sku] ? { name: FEED.nm[b.sku] } : {}), ...(FEED.im[b.sku] ? { img: FEED.im[b.sku] } : {}) })).concat(f.ad.map(a => ({ ...a, ...(FEED.im[a.sku] ? { img: FEED.im[a.sku] } : {}) })));
+}
 let FEED = { t: 0, im: {}, vd: {}, nm: {}, fn: {}, pr: {}, hd: [], ad: [] }, feedM = 0, feedChk = 0, BASE = BASE0;
 function refreshFeed() {
   const now = Date.now(); if (now - feedChk < 5000) return; feedChk = now;
-  let m = 0; try { m = fs.statSync(FEEDF).mtimeMs } catch {} if (m === feedM) return; feedM = m;
+  let m = 0, am = 0; try { m = fs.statSync(FEEDF).mtimeMs } catch {} try { am = fs.statSync(AUTOF).mtimeMs } catch {}
+  if (m === feedM && am === autoM) return;
+  if (am !== autoM) { autoM = am; AUTO = load(AUTOF, {}) || {} }
+  if (m === feedM) return applyFeed(); feedM = m;
   const f = load(FEEDF, null); if (!f || typeof f !== 'object') return;
-  FEED = { t: +f.t || 0, im: f.im || {}, vd: f.vd || {}, nm: f.nm || {}, fn: f.fn || {}, pr: f.pr || {}, hd: Array.isArray(f.hd) ? f.hd : [], ad: Array.isArray(f.ad) ? f.ad : [] };
-  BASE = BASE0.map(b => ({ ...b, ...(FEED.pr[b.sku] > 0 ? { price: FEED.pr[b.sku] } : {}), ...(FEED.nm[b.sku] ? { name: FEED.nm[b.sku] } : {}) })).concat(FEED.ad);
+  RAWFEED = { t: +f.t || 0, im: f.im || {}, vd: f.vd || {}, nm: f.nm || {}, fn: f.fn || {}, pr: f.pr || {}, hd: Array.isArray(f.hd) ? f.hd : [], ad: Array.isArray(f.ad) ? f.ad : [] };
+  applyFeed();
 }
 refreshFeed();
 
@@ -92,6 +108,21 @@ function view(o, role) {
   if (role === 'courier') { v.items = o.items.map(({ sku, name, qty }) => ({ sku, name, qty })); }
   return v;
 }
+
+
+/* ---------- дефектные товары: водяной знак поставщика / мелкая картинка. Свои фото и видео грузятся из приложения ---------- */
+const saveRaw = (req, file, max) => new Promise((ok, no) => {
+  let n = 0, dead = false; const tmp = file + '.part', out = fs.createWriteStream(tmp);
+  const fail = e => { if (dead) return; dead = true; try { req.unpipe(out); out.destroy() } catch {} fs.unlink(tmp, () => {}); no(e) };
+  req.on('data', c => { n += c.length; if (n > max) { fail(Object.assign(new Error('big'), { big: 1 })); req.resume() } });
+  req.on('error', fail); out.on('error', fail); req.on('aborted', () => fail(new Error('aborted')));
+  out.on('finish', () => { if (dead) return; if (n < 1000) return fail(new Error('empty')); try { fs.renameSync(tmp, file); ok(n) } catch (e) { fail(e) } });
+  req.pipe(out);
+});
+const saveOwn = () => { save(OWNF, OWN); applyFeed() };
+const dropFile = u => { if (!u) return; const f = String(u).split('?')[0].split('/').pop(); if (!/^own-/.test(f)) return; for (const d of [IMGDIR, VIDDIR, RAWDIR]) fs.unlink(path.join(d, f), () => {}) };
+const normImgs = () => new Promise(r => require('child_process').execFile('python3', [path.join(__dirname, 'normalize.py'), IMGDIR, RAWDIR], { timeout: 120e3 }, () => r()));
+const defRow = (sku, b) => { const a = AUTO[sku] || {}, o = OWN[sku] || {}, d = defectOf(sku); return { sku, name: b.name, cat: (b.cats || [])[0] || '', price: b.price, img: FEED.im[sku] || b.img || '', ni: !!(d && d.ni), nv: !!(d && d.nv), ri: a.i || '', rv: a.v || '', ownImg: !!o.img, ownVid: !!o.vid, okI: !!o.okI, okV: !!o.okV, open: !!d, hasVid: !!(FEED.vd[sku]), by: o.by || '', at: o.at || '' } };
 
 /* ---------- утилиты ---------- */
 const send = (res, code, body, extra = {}) => { const s = typeof body === 'string' ? body : JSON.stringify(body); res.writeHead(code, { 'content-type': typeof body === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra }); res.end(s) };
@@ -282,10 +313,45 @@ async function api(req, res, url) {
     }
   }
 
+  if (p === '/api/defects' || p.startsWith('/api/defects/')) {
+    if (!isM) return send(res, 403, { error: 'Только менеджер' });
+    refreshFeed();
+    const mp = p.match(/^\/api\/defects\/([^/]+)\/(img|vid|ok|reset)$/), sku = mp ? clean(decodeURIComponent(mp[1]), 60) : '';
+    if (m === 'GET' && p === '/api/defects') {
+      const idx = new Map(BASE.map(b => [b.sku, b])), rows = [];
+      for (const k in AUTO) { const b = idx.get(k); if (!b) continue; const o = OWN[k]; if (defectOf(k) || (o && (o.img || o.vid || o.okI || o.okV))) rows.push(defRow(k, b)) }
+      rows.sort((a, b) => (b.open - a.open) || a.name.localeCompare(b.name, 'ru'));
+      return send(res, 200, { rows, checked: autoM || 0 });
+    }
+    if (!mp) return send(res, 404, { error: 'not found' });
+    const b0 = BASE.find(x => x.sku === sku); if (!b0 || !AUTO[sku]) return send(res, 404, { error: 'Товар не найден среди дефектных' });
+    const o = OWN[sku] || (OWN[sku] = {}), now = new Date().toISOString(), tag = crypto.createHash('md5').update(sku).digest('hex').slice(0, 10) + '-' + Date.now().toString(36);
+    if (m === 'PUT' && mp[2] === 'img') {
+      const ct = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(), ext = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[ct];
+      if (!ext) return send(res, 400, { error: 'Нужна картинка JPG, PNG или WebP' });
+      if (limit('u' + me.id, 60, 3600e3)) return send(res, 429, { error: 'Слишком много загрузок, подождите' });
+      const fn = 'own-' + tag + '.' + ext; try { fs.mkdirSync(IMGDIR, { recursive: true }); await saveRaw(req, path.join(IMGDIR, fn), 25e6) } catch (e) { return send(res, e.big ? 413 : 400, { error: e.big ? 'Файл больше 25 МБ' : 'Не удалось принять файл' }) }
+      await normImgs(); dropFile(o.img); o.img = '/img/' + fn + '?n=1'; delete o.okI; o.by = me.name; o.at = now; saveOwn();
+      return send(res, 200, defRow(sku, b0));
+    }
+    if (m === 'PUT' && mp[2] === 'vid') {
+      const ct = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(), ext = { 'video/mp4': 'mp4', 'video/webm': 'webm' }[ct];
+      if (!ext) return send(res, 400, { error: 'Нужно видео MP4 или WebM' });
+      if (limit('u' + me.id, 60, 3600e3)) return send(res, 429, { error: 'Слишком много загрузок, подождите' });
+      const fn = 'own-' + tag + '.' + ext; try { fs.mkdirSync(VIDDIR, { recursive: true }); await saveRaw(req, path.join(VIDDIR, fn), 400e6) } catch (e) { return send(res, e.big ? 413 : 400, { error: e.big ? 'Видео больше 400 МБ' : 'Не удалось принять файл' }) }
+      dropFile(o.vid); o.vid = '/video/' + fn; delete o.okV; o.by = me.name; o.at = now; saveOwn();
+      return send(res, 200, defRow(sku, b0));
+    }
+    const bd = await body(req).catch(() => ({}));
+    if (m === 'POST' && mp[2] === 'ok') { const k = bd.kind === 'v' ? 'okV' : 'okI'; if (bd.value === false) delete o[k]; else o[k] = 1; o.by = me.name; o.at = now; saveOwn(); return send(res, 200, defRow(sku, b0)) }
+    if (m === 'POST' && mp[2] === 'reset') { dropFile(o.img); dropFile(o.vid); delete OWN[sku]; saveOwn(); return send(res, 200, defRow(sku, b0)) }
+    return send(res, 404, { error: 'not found' });
+  }
+
   if (p === '/api/catalog') { // все товары: видимость на сайте и цена
     refreshFeed();
     if (!isM) return send(res, 403, { error: 'Только менеджер' });
-    if (m === 'GET') return send(res, 200, BASE.map(b => { const o = cat[b.sku] || {}; return { sku: b.sku, name: b.name, cats: b.cats, brand: b.brand, img: b.img, v: b.v, base: b.price, price: o.p > 0 ? o.p : b.price, custom: o.p > 0, hidden: !!o.h } }));
+    if (m === 'GET') return send(res, 200, BASE.map(b => { const o = cat[b.sku] || {}; return { sku: b.sku, name: b.name, cats: b.cats, brand: b.brand, img: FEED.im[b.sku] || b.img, v: b.v, defect: defectOf(b.sku) || null, own: AUTO[b.sku] && OWN[b.sku] ? { img: !!OWN[b.sku].img, vid: !!OWN[b.sku].vid, okI: !!OWN[b.sku].okI, okV: !!OWN[b.sku].okV } : null, base: b.price, price: o.p > 0 ? o.p : b.price, custom: o.p > 0, hidden: !!o.h } }));
     if (m === 'PATCH') {
       const b = await body(req).catch(() => ({})), skus = (Array.isArray(b.skus) ? b.skus : [b.sku]).map(x => clean(x, 40)).filter(x => BASE.some(i => i.sku === x)).slice(0, 800);
       if (!skus.length) return send(res, 404, { error: 'Товар не найден' });
@@ -375,7 +441,7 @@ function stat(req, res, url) {
   });
 }
 
-http.createServer(async (req, res) => {
+http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end() }
   try {

@@ -11,11 +11,9 @@ sed "s#__ORDER_URL__#https://app.$BASE/order#g" "$SRC/site/index.html" > /var/ww
 if [ "$MODE" = "temp" ]; then cp "$SRC/site/robots-temp.txt" /var/www/salut38/robots.txt; else cp "$SRC/site/robots.txt" /var/www/salut38/robots.txt; fi
 cat > /opt/bs/run-sync.sh <<'R'
 #!/bin/bash
-# синхронизация -> проверка водяных знаков -> если появились новые, ещё раз синхронизация (скрыть их сразу)
-H=/var/lib/bs-data/hide-auto.txt; B=$(cat $H 2>/dev/null | md5sum)
+# синхронизация -> проверка картинок и видео (водяной знак, мелкие картинки) -> дефектные товары скрываются и попадают в приложение
 /usr/bin/node /opt/bs/sync.js "$@" || exit $?
 DATA_DIR=/var/lib/bs-data /usr/bin/python3 /opt/bs/wm-check.py
-[ "$B" != "$(cat $H 2>/dev/null | md5sum)" ] && /usr/bin/node /opt/bs/sync.js
 exit 0
 R
 chmod +x /opt/bs/run-sync.sh
@@ -45,6 +43,10 @@ WantedBy=timers.target
 U
 cp "$SRC/site/card.jpg" /var/www/salut38/card.jpg
 grep -q '^SITE_URL=' /etc/bs.env || printf 'SITE_URL=https://%s\nCARD_IMG=https://%s/card.jpg\n' "$BASE" "$BASE" >> /etc/bs.env
+NG=/etc/nginx/sites-available/salut38
+if [ -f "$NG" ] && grep -q 'client_max_body_size 2m' "$NG"; then
+  sed -i 's/client_max_body_size 2m;/client_max_body_size 450m;\n  proxy_request_buffering off;\n  client_body_timeout 900s;/; s/proxy_read_timeout 60s;/proxy_read_timeout 900s;/' "$NG" && nginx -t 2>/dev/null && systemctl reload nginx
+fi
 systemctl daemon-reload
 systemctl restart bs 2>/dev/null || true
 echo "Обновлено."

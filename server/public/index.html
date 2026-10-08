@@ -113,6 +113,10 @@ textarea.note{min-height:80px;resize:vertical}
 .pf{display:grid;gap:8px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:12px}
 .pf .two{display:grid;grid-template-columns:1fr auto;gap:8px}.pf .two button{background:#EEF1F8;border-radius:12px;padding:0 14px;font-weight:800;font-size:13px}
 .pf label{font-size:12px;font-weight:800;color:var(--muted);margin-bottom:-4px}
+.dchip.on{background:#E5121B;color:#fff}.dchip{color:#B42318}
+.cr{flex-wrap:wrap}.df{flex:1 0 100%;background:#FFF4E5;border:1px solid #F5C77E;border-radius:10px;padding:8px 10px;margin-top:6px}.df.ok{background:#EAF7EF;border-color:#9AD6B0}
+.df .dt{font-size:12.5px;font-weight:700;line-height:1.3}.df .db{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.dbtn{background:var(--y);color:#111;font-weight:800;font-size:13px;padding:9px 12px;border-radius:10px}.dbtn.g{background:#fff;border:1px solid var(--line);color:var(--text)}.dbtn:disabled{opacity:.6}
 </style>
 </head>
 <body>
@@ -354,20 +358,35 @@ function drawCarts(){const mn=$('#mn');
 
 
 /* ---------- товары: видимость на сайте и цена ---------- */
-let CAT=null,catQ='',catC='',catHid=false,catN=60;
+let CAT=null,catQ='',catC='',catHid=false,catDef=false,catN=60;
 async function loadCatalog(){try{CAT=await api('/api/catalog');if(tab==='catalog'){$('#cl')?catRender():drawCatalog()}}catch(e){toast(e.error,true)}}
-function catList(){let l=CAT||[];if(catC)l=l.filter(p=>p.cats.includes(catC));if(catHid)l=l.filter(p=>p.hidden);if(catQ){const s=catQ.toLowerCase();l=l.filter(p=>(p.name+' '+p.sku+' '+p.brand).toLowerCase().includes(s))}return l}
-function catRow(p){return `<div class="cr${p.hidden?' hid':''}" data-sku="${esc(p.sku)}"><img loading="lazy" src="${esc(p.img||'')}" alt="" onerror="this.style.visibility='hidden'"><div class="ci"><b>${esc(p.name)}</b><small>${esc(p.sku)} · ${esc(p.cats[0]||'')}${p.custom?' · поставщик '+rub(p.base):''}</small><div class="cc"><input class="f cp" inputmode="numeric" value="${p.price}" data-cpi="${esc(p.sku)}" aria-label="Цена"><span>₽</span>${p.custom?`<button data-crs="${esc(p.sku)}" title="Вернуть цену поставщика">↺</button>`:''}</div></div><button class="eye ${p.hidden?'':'on'}" data-eye="${esc(p.sku)}">${p.hidden?'Скрыт':'На сайте'}</button></div>`}
+function catList(){let l=CAT||[];if(catC)l=l.filter(p=>p.cats.includes(catC));if(catHid)l=l.filter(p=>p.hidden);if(catDef)l=l.filter(p=>p.defect);if(catQ){const s=catQ.toLowerCase();l=l.filter(p=>(p.name+' '+p.sku+' '+p.brand).toLowerCase().includes(s))}return l}
+function catRow(p){return `<div class="cr${p.hidden?' hid':''}" data-sku="${esc(p.sku)}"><img loading="lazy" src="${esc(p.img||'')}" alt="" onerror="this.style.visibility='hidden'"><div class="ci"><b>${esc(p.name)}</b><small>${esc(p.sku)} · ${esc(p.cats[0]||'')}${p.custom?' · поставщик '+rub(p.base):''}</small><div class="cc"><input class="f cp" inputmode="numeric" value="${p.price}" data-cpi="${esc(p.sku)}" aria-label="Цена"><span>₽</span>${p.custom?`<button data-crs="${esc(p.sku)}" title="Вернуть цену поставщика">↺</button>`:''}</div></div><button class="eye ${p.hidden||p.defect?'':'on'}" data-eye="${esc(p.sku)}">${p.defect?'Дефект':p.hidden?'Скрыт':'На сайте'}</button>${defPanel(p)}</div>`}
+const DR={wm:'водяной знак поставщика',low:'низкое качество картинки'};
+function defPanel(p){const d=p.defect,k=esc(p.sku);
+  if(d){const b=[];if(d.ni)b.push(`<button class="dbtn" data-dup="${k}:img">📷 Фото</button><button class="dbtn g" data-dok="${k}:i">Оставить картинку</button>`);if(d.nv)b.push(`<button class="dbtn" data-dup="${k}:vid">🎬 Видео</button><button class="dbtn g" data-dok="${k}:v">Оставить видео</button>`);
+    return `<div class="df"><div class="dt">⚠ На сайте скрыт: ${[d.ni?'нужна картинка ('+DR[d.ri]+')':'',d.nv?'нужно видео ('+DR[d.rv]+')':''].filter(Boolean).join('; ')}</div><div class="db">${b.join('')}</div></div>`}
+  if(p.own)return `<div class="df ok"><div class="dt">✓ Исправлено: ${[p.own.img?'своё фото':'',p.own.vid?'своё видео':'',p.own.okI||p.own.okV?'оставлено как есть':''].filter(Boolean).join(', ')}</div><div class="db"><button class="dbtn g" data-dreset="${k}">Вернуть как было</button></div></div>`;
+  return ''}
+function defUpload(sku,kind,file,btn){return new Promise((ok,no)=>{const x=new XMLHttpRequest();x.open('PUT','/api/defects/'+encodeURIComponent(sku)+'/'+kind);x.setRequestHeader('authorization','Bearer '+token);x.setRequestHeader('content-type',file.type||(kind==='vid'?'video/mp4':'image/jpeg'));
+  x.upload.onprogress=e=>{if(e.lengthComputable)btn.textContent='Загрузка '+Math.round(e.loaded/e.total*100)+'%'};
+  x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch{}x.status===200?ok(j):no({error:j.error||'Ошибка загрузки'})};x.onerror=()=>no({error:'Нет связи с сервером'});x.send(file)})}
+function defPick(sku,kind,btn){const i=document.createElement('input');i.type='file';i.accept=kind==='img'?'image/jpeg,image/png,image/webp':'video/mp4,video/webm';
+  i.onchange=async()=>{const f=i.files[0];if(!f)return;const t=btn.textContent;btn.disabled=true;try{await defUpload(sku,kind,f,btn);toast(kind==='img'?'Фото загружено':'Видео загружено',false,true);await loadCatalog()}catch(e){toast(e.error,true);btn.textContent=t;btn.disabled=false}};i.click()}
+function defCsv(){const l=(CAT||[]).filter(p=>p.defect);if(!l.length)return toast('Дефектных товаров нет',true);const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
+  const rows=[['Артикул','Название','Нужно видео','Нужна картинка','Причина']].concat(l.map(p=>[p.sku,p.name,p.defect.nv?'да':'нет',p.defect.ni?'да':'нет',[p.defect.ni?DR[p.defect.ri]:'',p.defect.nv?DR[p.defect.rv]:''].filter(Boolean).join('; ')]));
+  const b=new Blob(['\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='defektnye-tovary.csv';document.body.appendChild(a);a.click();a.remove()}
 function catRender(){const l=catList();$('#cl').innerHTML=l.length?l.slice(0,catN).map(catRow).join('')+(l.length>catN?`<button class="btn ghost" id="cmore" style="margin-top:6px">Показать ещё (${l.length-catN})</button>`:''):'<div class="empty">Ничего не найдено</div>';
   $('#cn').textContent='Найдено: '+l.length+' · скрыто на сайте: '+(CAT||[]).filter(p=>p.hidden).length;
-  document.querySelectorAll('#cch [data-cc]').forEach(b=>b.classList.toggle('on',b.dataset.cc===catC));$('#chid').classList.toggle('on',catHid)}
+  document.querySelectorAll('#cch [data-cc]').forEach(b=>b.classList.toggle('on',b.dataset.cc===catC));$('#chid').classList.toggle('on',catHid);const dn=(CAT||[]).filter(p=>p.defect).length;$('#cdef').textContent='⚠ Дефектные ('+dn+')';$('#cdef').classList.toggle('on',catDef);if($('#cdl'))$('#cdl').hidden=!catDef}
 function catPut(r){r.items.forEach(it=>{const p=CAT.find(x=>x.sku===it.sku);if(p)Object.assign(p,it);const row=document.querySelector('.cr[data-sku="'+CSS.escape(it.sku)+'"]');if(row&&p)row.outerHTML=catRow(p)});$('#cn').textContent=$('#cn').textContent.replace(/скрыто на сайте: \d+/,'скрыто на сайте: '+CAT.filter(p=>p.hidden).length)}
 function drawCatalog(){const mn=$('#mn');if($('#cl'))return;
   if(!CAT){mn.innerHTML='<div class="ph">Товары</div><div class="empty">Загрузка…</div>';return}
   const cats=[...new Set(CAT.flatMap(p=>p.cats))];
   mn.innerHTML=`<div class="ph">Товары</div><input class="search" id="cq" type="search" placeholder="Поиск: название или артикул" value="${esc(catQ)}">
-    <div class="chips" id="cch"><button data-cc="" class="on">Все</button>${cats.map(c=>`<button data-cc="${esc(c)}">${esc(c)}</button>`).join('')}<button id="chid">Скрытые</button></div>
+    <div class="chips" id="cch"><button data-cc="" class="on">Все</button>${cats.map(c=>`<button data-cc="${esc(c)}">${esc(c)}</button>`).join('')}<button id="chid">Скрытые</button><button id="cdef" class="dchip">⚠ Дефектные</button></div>
     <div class="mt" id="cn" style="color:var(--muted);font-weight:600;font-size:13px;margin:2px 2px 8px"></div>
+    <div id="cdl" hidden style="margin-bottom:10px"><div class="mt" style="font-size:13px;color:var(--muted);margin-bottom:6px">Эти товары скрыты на сайте: на картинке или видео водяной знак поставщика, либо картинка мелкая. Загрузите свою картинку или видео, и товар сам вернётся на сайт.</div><button class="btn ghost" id="cdcsv" style="padding:9px;font-size:13px">Скачать таблицу (CSV)</button></div>
     <div class="bt" style="display:flex;gap:6px;margin-bottom:10px"><button id="cbh" class="btn ghost" style="padding:9px;font-size:13px">Скрыть найденные</button><button id="cbs" class="btn ghost" style="padding:9px;font-size:13px">Показать найденные</button></div><div id="cl"></div>`;
   catRender();
   $('#cq').oninput=e=>{catQ=e.target.value.trim();catN=60;catRender()};
@@ -376,8 +395,13 @@ function drawCatalog(){const mn=$('#mn');if($('#cl'))return;
     try{
       if(t.dataset.cc!==undefined){catC=t.dataset.cc;catN=60;catRender()}
       else if(t.id==='chid'){catHid=!catHid;catN=60;catRender()}
+      else if(t.id==='cdef'){catDef=!catDef;catN=60;catRender()}
+      else if(t.id==='cdcsv')defCsv();
+      else if(t.dataset.dup){const [k,kind]=t.dataset.dup.split(':');defPick(k,kind,t)}
+      else if(t.dataset.dok){const [k,kind]=t.dataset.dok.split(':');if(confirm('Показывать товар на сайте с текущей '+(kind==='i'?'картинкой':'видео')+'?')){await api('/api/defects/'+encodeURIComponent(k)+'/ok',{method:'POST',body:{kind,value:true}});toast('Товар вернётся на сайт',false,true);await loadCatalog()}}
+      else if(t.dataset.dreset){if(confirm('Убрать своё фото/видео и снова считать товар дефектным?')){await api('/api/defects/'+encodeURIComponent(t.dataset.dreset)+'/reset',{method:'POST',body:{}});await loadCatalog()}}
       else if(t.id==='cmore'){catN+=60;catRender()}
-      else if(t.dataset.eye){const p=CAT.find(x=>x.sku===t.dataset.eye);catPut(await api('/api/catalog',{method:'PATCH',body:{sku:p.sku,hidden:!p.hidden}}));toast(p.hidden?'Скрыт на сайте':'Показывается на сайте',false,true)}
+      else if(t.dataset.eye){const p=CAT.find(x=>x.sku===t.dataset.eye);if(p.defect)return toast('Товар дефектный: загрузите своё фото/видео или нажмите «Оставить»',true);catPut(await api('/api/catalog',{method:'PATCH',body:{sku:p.sku,hidden:!p.hidden}}));toast(p.hidden?'Скрыт на сайте':'Показывается на сайте',false,true)}
       else if(t.dataset.crs){catPut(await api('/api/catalog',{method:'PATCH',body:{sku:t.dataset.crs,price:null}}));toast('Цена поставщика возвращена',false,true)}
       else if(t.id==='cbh'||t.id==='cbs'){const l=catList(),hide=t.id==='cbh';if(!l.length)return;if(l.length>300&&!catC&&!catQ&&!catHid)return toast('Сначала выберите категорию или найдите товары',true);
         if(confirm((hide?'Скрыть на сайте ':'Показать на сайте ')+l.length+' товаров?')){const r=await api('/api/catalog',{method:'PATCH',body:{skus:l.map(x=>x.sku),hidden:hide}});r.items.forEach(it=>Object.assign(CAT.find(x=>x.sku===it.sku),it));catRender();toast('Готово',false,true)}}

@@ -73,13 +73,15 @@ server {
 server {
   listen 80;
   server_name app.$BASE;
-  client_max_body_size 2m;
+  client_max_body_size 450m;
+  proxy_request_buffering off;
+  client_body_timeout 900s;
   location / {
     proxy_pass http://127.0.0.1:8080;
     proxy_set_header Host \$host;
     proxy_set_header X-Forwarded-For \$remote_addr;
     proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_read_timeout 60s;
+    proxy_read_timeout 900s;
   }
 }
 NGINX

@@ -161,7 +161,7 @@ async function main() {
   const sameName = (a, c) => { a = nz(a); c = nz(c); return !a || !c || a.includes(c) || c.includes(a); };
 
   const readList = f => { try { return new Set(fs.readFileSync(path.join(DATA, f), 'utf8').split(/\r?\n/).map(x => x.trim()).filter(x => x && x[0] !== '#')); } catch { return new Set(); } };
-  const manualHide = new Set([...readList('hide-manual.txt'), ...readList('hide-auto.txt')]), noVideo = readList('novideo.txt'); // ручные списки: скрыть товар / не показывать видео
+  const manualHide = readList('hide-manual.txt'), noVideo = readList('novideo.txt'); // ручные списки: скрыть товар / не показывать видео
   const pr = {}, hd = [], diffs = [], inBase = new Set(base.map(b => b.sku)), chosen = new Map(), nmap = {}, fnmap = {}, renamed = [];
   let same = 0, noPrice = 0;
   for (const b of base) {
@@ -249,7 +249,7 @@ async function main() {
   saveAtomic(F.status, { ok: true, at: new Date().toISOString(), apiN: list.length, changed: diffs.length, hidden: hd.length, added: ad.length });
   try { // убираем картинки, на которые больше никто не ссылается (старые копии картинок поставщика)
     const used = new Set([...Object.values(im), ...ad.map(a => a.img)].map(u => u.split('?')[0].split('/').pop()));
-    if (used.size > 50) for (const dir of [IMGDIR, RAWDIR]) for (const f of fs.readdirSync(dir)) if (/\.(jpe?g|png|webp)$/i.test(f) && !used.has(f)) fs.unlinkSync(path.join(dir, f));
+    if (used.size > 50) for (const dir of [IMGDIR, RAWDIR]) for (const f of fs.readdirSync(dir)) if (/\.(jpe?g|png|webp)$/i.test(f) && !used.has(f) && !/^own-/.test(f)) fs.unlinkSync(path.join(dir, f));
   } catch (e) { log('очистка старых картинок пропущена:', e.message); }
   log('Готово: данные записаны, сайт обновится сам.');
 }
