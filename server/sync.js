@@ -280,7 +280,7 @@ async function main() {
 
   // характеристики товара от поставщика (pyro_good_params: время работы, высота, размер…): по одному запросу на товар, хранятся в DATA/good-params.json
   if (!DRY) {
-    const GP = path.join(DATA, 'good-params.json'), gp = load(GP, {}), nowMs = Date.now(), TTL = 14 * 864e5, CAP = +process.env.PARAMS_CAP || 400;
+    const GP = path.join(DATA, 'good-params.json'), gp = load(GP, {}), nowMs = Date.now(), TTL = 14 * 864e5, CAP = +process.env.PARAMS_CAP || 1500;
     const need = have.filter(h => h.it.id && (!gp[h.art] || gp[h.art].id !== h.it.id || nowMs - gp[h.art].t > TTL)).slice(0, CAP);
     let ok = 0, bad = 0, stop = false;
     if (need.length) {
