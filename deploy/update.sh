@@ -27,6 +27,8 @@ cat > /etc/systemd/system/bs-sync.service <<'U'
 Description=Baikal Salut supplier sync
 [Service]
 Type=oneshot
+Nice=15
+IOSchedulingClass=idle
 User=bs
 WorkingDirectory=/opt/bs
 EnvironmentFile=/etc/bs.env
