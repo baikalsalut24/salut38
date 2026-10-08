@@ -278,6 +278,27 @@ async function main() {
   }
   log('Свои копии на сервере: картинок', md.img, '| видео', md.vid, '| ошибок скачивания', md.fail);
 
+  // характеристики товара от поставщика (pyro_good_params: время работы, высота, размер…): по одному запросу на товар, хранятся в DATA/good-params.json
+  if (!DRY) {
+    const GP = path.join(DATA, 'good-params.json'), gp = load(GP, {}), nowMs = Date.now(), TTL = 14 * 864e5, CAP = +process.env.PARAMS_CAP || 400;
+    const need = have.filter(h => h.it.id && (!gp[h.art] || gp[h.art].id !== h.it.id || nowMs - gp[h.art].t > TTL)).slice(0, CAP);
+    let ok = 0, bad = 0, stop = false;
+    if (need.length) {
+      const tk = await token().catch(() => null);
+      await pool(need, 3, async h => {
+        if (stop || !tk) return;
+        try {
+          const r = await getJson(BASEURL + '/api/1.0/pyro_good_params/?' + q({ client_id: ID, token: tk, good_id: h.it.id }));
+          if (!r.success || !Array.isArray(r.data)) throw new Error('нет данных');
+          gp[h.art] = { id: h.it.id, t: nowMs, p: r.data.map(x => [String(x.name || '').trim(), String(x.value == null ? '' : x.value).trim(), String(x.unit || '').trim()]).filter(x => x[0] && x[1]) }; ok++;
+        } catch (e) { bad++; if (bad >= 15 && !ok) stop = true; }
+      });
+    }
+    for (const k of Object.keys(gp)) if (!have.some(h => h.art === k) && nowMs - gp[k].t > 60 * 864e5) delete gp[k];
+    saveAtomic(GP, gp);
+    log('Характеристики товаров: получено', ok, '| ошибок', bad, '| в базе', Object.keys(gp).length, need.length === CAP ? '| (лимит за запуск, остальное в следующий раз)' : '');
+  }
+
   diffs.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
   log('--- ИТОГ ---');
   log('Товаров в каталоге сайта:', base.length, '| цена та же:', same, '| цена изменится:', diffs.length, '| с финалом:', Object.keys(fnmap).length, '| будут скрыты (нет у поставщика):', hd.length, '| без цены у поставщика (цена не меняется):', noPrice);

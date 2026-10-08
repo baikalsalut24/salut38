@@ -37,11 +37,34 @@ function applyFeed() { // лента поставщика + дефекты + с�
   BASE = BASE0.map(b => ({ ...b, ...(FEED.pr[b.sku] > 0 ? { price: FEED.pr[b.sku] } : {}), ...(FEED.nm[b.sku] ? { name: FEED.nm[b.sku] } : {}), ...(FEED.im[b.sku] ? { img: FEED.im[b.sku] } : {}) })).concat(f.ad.map(a => ({ ...a, ...(FEED.im[a.sku] ? { img: FEED.im[a.sku] } : {}) })));
 }
 let DURC = { m: 0, d: {} };
-function durMap() { // sku -> секунды работы (длина ролика минус 2 с заставки)
+let GPC = { m: 0, d: {} };
+function gpData() { // характеристики от поставщика: sku -> [[имя, значение, ед.]]
+  let m = 0; try { m = fs.statSync(path.join(DATA, 'good-params.json')).mtimeMs } catch {}
+  if (m !== GPC.m) { GPC = { m, d: load(path.join(DATA, 'good-params.json'), {}) || {} } }
+  return GPC.d;
+}
+const secOf = v => { const s = String(v || '').trim(); let m = s.match(/^(\d+):(\d{1,2})$/); if (m) return +m[1] * 60 + +m[2]; m = s.match(/^\d+$/); return m ? +s : 0 };
+const durFmt = s => s >= 60 ? Math.floor(s / 60) + ' мин' + (s % 60 ? ' ' + s % 60 + ' с' : '') : s + ' с';
+const PM_SKIP = /^(производитель|кол-во выстрелов|калибр)$/i; // уже показаны в карточке
+function pmMap() { // sku -> [[название, значение]] для карточки товара
+  const out = {}, d = gpData();
+  for (const k in d) {
+    const rows = [];
+    for (const [n, v, u] of d[k].p || []) {
+      if (PM_SKIP.test(n)) continue;
+      const nm = n.charAt(0).toUpperCase() + n.slice(1);
+      rows.push([nm, /время работы/i.test(n) && secOf(v) ? durFmt(secOf(v)) : (v + (u && u !== '"' ? ' ' + u : '')).replace(/\s+/g, ' ').trim()]);
+    }
+    if (rows.length) out[k] = rows;
+  }
+  return out;
+}
+function durMap() { // sku -> секунды работы: «время работы» от поставщика, иначе длина ролика минус 2 с заставки
   let m = 0; try { m = fs.statSync(path.join(DATA, 'video-dur.json')).mtimeMs } catch {}
   if (m !== DURC.m) { DURC = { m, d: load(path.join(DATA, 'video-dur.json'), {}) || {} } }
-  const out = {};
+  const out = {}, gp = gpData();
   for (const k in FEED.vd) { const e = DURC.d[String(FEED.vd[k]).split('/').pop()]; if (e && e.d > 2) out[k] = Math.max(1, e.d - 2) }
+  for (const k in gp) { const w = (gp[k].p || []).find(x => /^время работы$/i.test(x[0])); if (w && secOf(w[1]) > 0) out[k] = secOf(w[1]) }
   return out;
 }
 let FEED = { t: 0, im: {}, vd: {}, nm: {}, fn: {}, pr: {}, hd: [], ad: [] }, feedM = 0, feedChk = 0, BASE = BASE0;
@@ -252,7 +275,7 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/catalog') { // сайт: что скрыто и какие цены выставлены в приложении
     if (limit('g' + ipOf(req), 120, 60e3)) return send(res, 429, {}, CORS);
     const o = {}; for (const k in cat) { const v = cat[k]; if (v.h || v.p > 0) o[k] = { ...(v.p > 0 ? { p: v.p } : {}), ...(v.h ? { h: 1 } : {}) } }
-    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, im: FEED.im, vd: FEED.vd, du: durMap(), nm: FEED.nm, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad.map(a => { const { fin, ...r } = a; return r }) } }, { ...CORS, 'cache-control': 'no-store' });
+    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, im: FEED.im, vd: FEED.vd, du: durMap(), pm: pmMap(), nm: FEED.nm, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad.map(a => { const { fin, ...r } = a; return r }) } }, { ...CORS, 'cache-control': 'no-store' });
   }
 
   if (m === 'GET' && p === '/api/users') return send(res, 200, users.map(pub)); // для экрана входа, без PIN
