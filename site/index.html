@@ -1067,7 +1067,7 @@ document.addEventListener('click',function(e){var t=e.target;if(!t.closest)retur
 var $k=function(i){return document.getElementById(i)};
 var K={occ:'ny',show:'long',kids:false,seed:0,items:[],budget:15000};
 function calN(p){var m=String(p.cal||'').replace(',','.').match(/[\d.]+/);return m?parseFloat(m[0]):0}
-function durOf(p){if(p.shots>1)return p.shots*0.6;if(p.cats.indexOf('Фонтаны')>-1)return 40;if(p.cats.indexOf('Бенгальские свечи')>-1)return 60;return 3}
+function durOf(p){if(p.du>0)return p.du;if(p.shots>1)return p.shots*0.6;if(p.cats.indexOf('Фонтаны')>-1)return 40;if(p.cats.indexOf('Бенгальские свечи')>-1)return 60;return 3}
 function mmss(sec){sec=Math.round(sec);return Math.floor(sec/60)+':'+('0'+sec%60).slice(-2)}
 var ROLE={o:'Открытие',m:'Основная часть',f:'Финал',x:'Дополнительно',k:'Детям'};
 var ORDER={o:0,m:1,x:2,k:3,f:4};
