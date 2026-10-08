@@ -156,6 +156,15 @@ const MAX_BOT = process.env.MAX_BOT || '';
 const NOTE = { new: 'принят', confirmed: 'принят в работу', picking: 'передан на сборку', packed: 'собран и скоро поедет к вам', shipping: 'передан курьеру, он уже в пути', delivered: 'отгружен. Спасибо, что выбрали «Байкал Салют»!', failed: 'не удалось доставить, менеджер свяжется с вами', cancelled: 'отменён' };
 const tgSend = (chat, text) => TG && chat ? fetch(TG_API + '/bot' + TG + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) }).catch(e => console.error('tg', e.message)) : null;
 let BOT = null;
+// Уведомление о новом заказе в служебный бот (ALERT_TOKEN, ALERT_CHAT в /etc/bs.env) — только для владельца
+const ALERT_TOKEN = process.env.ALERT_TOKEN || '', ALERT_CHAT = process.env.ALERT_CHAT || '';
+function alertOrder(o) {
+  if (!ALERT_TOKEN || !ALERT_CHAT) return;
+  const rub = n => Math.round(n).toString().replace(/\B(?=(\d{3})+$)/g, ' ') + ' ₽';
+  const d = o.deliveryDate ? o.deliveryDate.split('-').reverse().join('.') : 'не указана';
+  const text = '🛒 Новый заказ № ' + o.id + '\nСумма: ' + rub(o.total) + '\nДоставка: ' + d + (o.deliveryInterval ? ', ' + o.deliveryInterval : '') + '\nАдрес: ' + (o.address || 'не указан') + '\nКлиент: ' + o.name + '\nТелефон: ' + o.phone;
+  fetch(TG_API + '/bot' + ALERT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: ALERT_CHAT, text }) }).catch(e => console.error('alert', e.message));
+}
 function notifyOrder(o, text) { const n = o.notify; if (!n || !n.chatId || !BOT) return; if (n.channel === 'telegram' || n.channel === 'max') BOT.send(n.channel, n.chatId, text) }
 const statusText = o => 'Заказ № ' + o.id + ': ' + (NOTE[o.status] || o.status) + (o.status === 'shipping' && o.deliveryInterval ? '. Доставка: ' + o.deliveryInterval : '').replace(/([^.!])$/, '$1.');
 const priceOf = (sku, p) => { const o = cat[sku]; return o && o.p > 0 ? o.p : p }; // цена, выставленная менеджером, главнее цены с сайта
@@ -213,7 +222,7 @@ async function api(req, res, url) {
     const now = new Date().toISOString();
     orders[id] = { id, createdAt: now, name: clean(o.name, 100) || 'Без имени', phone, address: clean(o.address, 300), comment: clean(o.comment, 500), promo: clean(o.promo, 60), deliveryDate: /^\d{4}-\d{2}-\d{2}$/.test(String(o.deliveryDate || '')) ? String(o.deliveryDate) : '', deliveryInterval: clean(o.deliveryInterval, 20), source: clean(o.source, 60) || 'Сайт', consentAt: o.consent === true ? now : '', items: its, discount, total: sumAll - discount, status: 'new', paid: false, pay: 'unpaid', courierId: null, history: [{ at: now, by: 'Сайт', role: 'site', from: null, to: 'new', note: '' }], updatedAt: now };
     dropCarts(clean(o.cartId, 30).replace(/[^\w-]/g, ''), phone); // из брошенных — в обычные
-    persist(); return send(res, 200, { ok: true, id, total: sumAll - discount, discount }, CORS);
+    persist(); alertOrder(orders[id]); return send(res, 200, { ok: true, id, total: sumAll - discount, discount }, CORS);
   }
 
   if (m === 'GET' && p === '/promo/check') { // сайт спрашивает, действует ли код
