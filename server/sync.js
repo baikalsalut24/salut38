@@ -68,8 +68,9 @@ async function getJson(url) { const t = await get(url); try { return JSON.parse(
 async function token() {
   const now = Math.floor(Date.now() / 1000);
   let t = load(F.token, null);
-  if (t && t.access_token && t.expires_in > now + 300) return t.access_token;
-  if (t && t.refresh_token) { // продление
+  const full = t && Array.isArray(t.scopes) && t.scopes.includes('pyro_good_params'); // права на характеристики товара
+  if (t && t.access_token && full && t.expires_in > now + 300) return t.access_token;
+  if (t && t.refresh_token && full) { // продление
     try {
       const r = await getJson(BASEURL + '/oauth2/token/?' + q({ grant_type: 'refresh_token', client_id: ID, refresh_token: t.refresh_token, client_secret: SECRET }));
       if (r.success && r.access_token) { t = { ...t, access_token: r.access_token, expires_in: r.expires_in }; if (!DRY) saveAtomic(F.token, t, 0o600); return t.access_token; }
@@ -77,9 +78,13 @@ async function token() {
   }
   const a = await getJson(BASEURL + '/oauth2/autorize/?' + q({ response_type: 'code', client_id: ID }));
   if (!a.success || !a.code) throw new Error('поставщик не выдал временный код (проверьте CLIENT_ID)');
-  const r = await getJson(BASEURL + '/oauth2/token/?' + q({ grant_type: 'authorization_code', client_id: ID, code: a.code, client_secret: SECRET, scopes: 'pyro_catlist,pyro_goodlist' }));
+  let r = await getJson(BASEURL + '/oauth2/token/?' + q({ grant_type: 'authorization_code', client_id: ID, code: a.code, client_secret: SECRET, scopes: 'pyro_catlist,pyro_goodlist,pyro_good_params' }));
+  if (!r.success || !r.access_token) { // запасной вариант: без характеристик (старые права)
+    const a2 = await getJson(BASEURL + '/oauth2/autorize/?' + q({ response_type: 'code', client_id: ID }));
+    r = await getJson(BASEURL + '/oauth2/token/?' + q({ grant_type: 'authorization_code', client_id: ID, code: a2.code, client_secret: SECRET, scopes: 'pyro_catlist,pyro_goodlist' }));
+  }
   if (!r.success || !r.access_token) throw new Error('поставщик не выдал ключ доступа (проверьте CLIENT_SECRET)');
-  t = { access_token: r.access_token, refresh_token: r.refresh_token, expires_in: r.expires_in };
+  t = { access_token: r.access_token, refresh_token: r.refresh_token, expires_in: r.expires_in, scopes: r.scopes || ['pyro_catlist', 'pyro_goodlist'] };
   if (!DRY) saveAtomic(F.token, t, 0o600);
   return t.access_token;
 }
@@ -116,6 +121,7 @@ async function pool(items, n, fn) { let i = 0; await Promise.all(Array.from({ le
 async function main() {
   if (!ID || !SECRET) { log('Ключи поставщика не заданы (SALUT_ID / SALUT_SECRET), синхронизация пропущена.'); process.exit(0); }
   fs.mkdirSync(DATA, { recursive: true });
+  if (process.argv.includes('--auth')) { try { await token(); const t = load(F.token, {}); log('Доступ получен, права:', (t.scopes || []).join(', ')); } catch (e) { log('ОШИБКА:', e.message); process.exit(2); } return; }
   const base = load(path.join(__dirname, 'catalog.json'), []);
   if (!base.length) fail('не найден catalog.json');
   const prev = load(F.feed, null);
