@@ -72,19 +72,21 @@ const checkPin = (u, pin) => { const h = crypto.scryptSync(String(pin), u.salt, 
 const uid = () => crypto.randomBytes(4).toString('hex');
 if (!users) {
   const mk = (name, role, pin) => ({ id: uid(), name, role, ...hashPin(pin) });
-  users = [mk('Владелец', 'admin', '0000'), mk('Менеджер', 'manager', '1111'), mk('Кладовщик', 'storekeeper', '2222'), mk('Экспедитор', 'courier', '3333')];
+  users = [mk('Владелец', 'admin', '0000')];
   save(F.users, users);
-  console.log('Созданы сотрудники с PIN по умолчанию: Владелец 0000, Менеджер 1111, Кладовщик 2222, Экспедитор 3333. Смените PIN в приложении (вкладка «Команда»).');
+  console.log('Создан владелец с PIN по умолчанию 0000. Смените PIN в приложении (вкладка «Команда»).');
 }
+// остаётся только роль «Владелец»: сотрудников с другими ролями убираем (роли будут собраны отдельно)
+if (users.some(u => u.role !== 'admin')) { users = users.filter(u => u.role === 'admin'); if (!users.length) users.push({ id: uid(), name: 'Владелец', role: 'admin', ...hashPin('0000') }); save(F.users, users); console.log('Роли кроме «Владелец» удалены, сотрудников:', users.length); }
 
 /* ---------- роли и статусы ---------- */
-const ROLES = { admin: 'Владелец', manager: 'Менеджер', storekeeper: 'Кладовщик', courier: 'Экспедитор' };
+const ROLES = { admin: 'Владелец' }; // пока одна роль с полными правами; остальные роли будут собраны отдельно
 const STATUS = {
   new: 'Новый', confirmed: 'В обработке', picking: 'Размещён', packed: 'Собран',
   shipping: 'В доставке', delivered: 'Отгружен', failed: 'Не доставлен', cancelled: 'Отменён'
 };
 const PAY = { unpaid: 'Не оплачен', partial: 'Частично оплачен', paid: 'Оплачен' }; // статус оплаты — отдельно от статуса заказа
-const M = ['manager', 'admin'];
+const M = ['admin'];
 // из какого статуса, в какой, кому можно
 const FLOW = [
   ['new', 'confirmed', M], ['new', 'cancelled', M],
@@ -97,7 +99,7 @@ const FLOW = [
 const canMove = (role, from, to) => FLOW.some(([f, t, r]) => f === from && t === to && r.includes(role));
 const nextFor = (role, from) => FLOW.filter(([f, , r]) => f === from && r.includes(role)).map(x => x[1]);
 // какие статусы видит роль
-const SEES = { admin: null, manager: null, storekeeper: ['confirmed', 'picking', 'packed'], courier: ['packed', 'shipping', 'failed', 'delivered'] };
+const SEES = { admin: null };
 
 /* ---------- промокоды и дисконтные карты ---------- */
 const normCode = s => String(s == null ? '' : s).replace(/[\u0000-\u001f\s]/g, '').toUpperCase().slice(0, 30);
@@ -285,7 +287,7 @@ async function api(req, res, url) {
     if (m === 'GET' && !mm[2]) return send(res, 200, view(o, role));
 
     if (m === 'POST' && mm[2] === 'status') {
-      const to = b.status; if (!STATUS[to] || !canMove(role, o.status, to)) return send(res, 403, { error: 'Этот переход вам недоступен' });
+      const to = b.status; if (!STATUS[to] || !(canMove(role, o.status, to) || (b.force === true && role === 'admin' && to !== o.status))) return send(res, 403, { error: 'Этот переход вам недоступен' });
       const note = clean(b.note, 300);
       if ((to === 'failed' || to === 'cancelled') && !note) return send(res, 400, { error: 'Укажите причину' });
       if (to === 'packed' && !isM && !o.items.every(i => i.picked)) return send(res, 400, { error: 'Отметьте все позиции собранными' });
@@ -311,6 +313,22 @@ async function api(req, res, url) {
       if ('address' in b) o.address = clean(b.address, 300);
       if ('deliveryDate' in b) o.deliveryDate = /^\d{4}-\d{2}-\d{2}$/.test(String(b.deliveryDate || '')) ? String(b.deliveryDate) : '';
       if ('deliveryInterval' in b) o.deliveryInterval = clean(b.deliveryInterval, 20);
+      // владелец правит заказ на любой стадии: клиент, состав, цены, скидка
+      const edits = [];
+      if ('name' in b && clean(b.name, 100) !== o.name) { o.name = clean(b.name, 100) || 'Без имени'; edits.push('имя') }
+      if ('phone' in b) { const ph = clean(b.phone, 40); if (ph.replace(/\D/g, '').length < 10) return send(res, 400, { error: 'Телефон: не меньше 10 цифр' }); if (ph !== o.phone) { o.phone = ph; edits.push('телефон') } }
+      if (Array.isArray(b.items)) {
+        const prev = new Map(o.items.map(i => [i.sku, i])), its = b.items.slice(0, 80).map(i => { const sku = clean(i.sku, 40), old = prev.get(sku) || {}; return { sku, name: clean(i.name, 200) || old.name || sku, qty: Math.max(1, Math.min(999, Math.floor(+i.qty || 1))), price: Math.max(0, Math.round((+i.price || 0) * 100) / 100), picked: !!old.picked } });
+        if (!its.length || its.some(i => !i.sku)) return send(res, 400, { error: 'В заказе должна остаться хотя бы одна позиция' });
+        its.forEach(i => i.sum = Math.round(i.price * i.qty * 100) / 100);
+        if (JSON.stringify(its.map(i => [i.sku, i.qty, i.price])) !== JSON.stringify(o.items.map(i => [i.sku, i.qty, i.price]))) edits.push('состав');
+        o.items = its;
+      }
+      if ('discount' in b) { const d = Math.max(0, Math.round(+b.discount || 0)); if (d !== o.discount) { o.discount = d; if (!o.promo || !d) o.discountNote = d ? 'Скидка вручную: ' + d + ' ₽' : ''; edits.push('скидка') } }
+      if (edits.length || Array.isArray(b.items)) {
+        const sumAll = o.items.reduce((s, i) => s + i.sum, 0); o.discount = Math.min(o.discount || 0, sumAll); o.total = Math.round((sumAll - o.discount) * 100) / 100;
+        if (edits.length) o.history.push({ at: new Date().toISOString(), by: me.name, role, from: o.status, to: o.status, note: 'Правка заказа: ' + edits.join(', ') });
+      }
       o.updatedAt = new Date().toISOString(); persist(); return send(res, 200, view(o, role));
     }
   }
@@ -429,15 +447,14 @@ async function api(req, res, url) {
     if (m === 'GET') return send(res, 200, users.map(pub));
     const b = await body(req).catch(() => ({}));
     if (m === 'POST') {
-      const name = clean(b.name, 40), r = b.role, pin = String(b.pin || '');
-      if (!name || !ROLES[r] || !/^\d{4,8}$/.test(pin)) return send(res, 400, { error: 'Имя, роль и PIN из 4–8 цифр' });
+      const name = clean(b.name, 40), r = 'admin', pin = String(b.pin || '');
+      if (!name || !/^\d{4,8}$/.test(pin)) return send(res, 400, { error: 'Имя и PIN из 4–8 цифр' });
       const u = { id: uid(), name, role: r, ...hashPin(pin) }; users.push(u); save(F.users, users); return send(res, 200, pub(u));
     }
     if (m === 'PATCH') {
       const u = users.find(x => x.id === b.id); if (!u) return send(res, 404, { error: 'Нет сотрудника' });
       if (b.pin != null) { if (!/^\d{4,8}$/.test(String(b.pin))) return send(res, 400, { error: 'PIN из 4–8 цифр' }); Object.assign(u, hashPin(b.pin)); for (const k in sessions) if (sessions[k].uid === u.id) delete sessions[k] }
       if (b.name) u.name = clean(b.name, 40);
-      if (b.role && ROLES[b.role]) { if (u.role === 'admin' && b.role !== 'admin' && users.filter(x => x.role === 'admin').length < 2) return send(res, 400, { error: 'Нужен хотя бы один владелец' }); u.role = b.role }
       save(F.users, users); save(F.sessions, sessions); return send(res, 200, pub(u));
     }
     if (m === 'DELETE') {
