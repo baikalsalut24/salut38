@@ -4,6 +4,7 @@ set -euo pipefail
 . /etc/salut38.conf
 [ "${1:-}" = "nopull" ] || git -C "$SRC" pull --ff-only
 python3 -c "import PIL" 2>/dev/null || apt-get install -y python3-pil >/dev/null
+cp "$SRC/deploy/monitor.sh" /opt/bs/monitor.sh; chmod +x /opt/bs/monitor.sh
 cp -r "$SRC/server/list-supplier-images.js" "$SRC/server/img-stats.py" "$SRC/server/contact-sheet.py" "$SRC/server/video-frames.py" "$SRC/server/wm-check.py" "$SRC/server/faststart.js" "$SRC/server/video-dur.js" "$SRC/server/normalize.py" "$SRC/server/check-feed.js" "$SRC/server/server.js" "$SRC/server/cardbot.js" "$SRC/server/sync.js" "$SRC/server/public" "$SRC/server/catalog.json" /opt/bs/
 mkdir -p /var/www/salut38/img /var/www/salut38/video
 chown -R bs:bs /opt/bs /var/lib/bs-data /var/www/salut38/img /var/www/salut38/video
@@ -49,6 +50,23 @@ NG=/etc/nginx/sites-available/salut38
 if [ -f "$NG" ] && grep -q 'client_max_body_size 2m' "$NG"; then
   sed -i 's/client_max_body_size 2m;/client_max_body_size 450m;\n  proxy_request_buffering off;\n  client_body_timeout 900s;/; s/proxy_read_timeout 60s;/proxy_read_timeout 900s;/' "$NG" && nginx -t 2>/dev/null && systemctl reload nginx
 fi
+cat > /etc/systemd/system/bs-monitor.service <<'U'
+[Unit]
+Description=Байкал Салют: проверка здоровья
+[Service]
+Type=oneshot
+ExecStart=/opt/bs/monitor.sh
+U
+cat > /etc/systemd/system/bs-monitor.timer <<'U'
+[Unit]
+Description=Проверка здоровья каждые 5 минут
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target
+U
+systemctl enable --now bs-monitor.timer >/dev/null 2>&1 || true
 systemctl daemon-reload
 systemctl restart bs 2>/dev/null || true
 (DATA_DIR=/var/lib/bs-data VIDEO_DIR=/var/www/salut38/video /usr/bin/node /opt/bs/video-dur.js || true)
