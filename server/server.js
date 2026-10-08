@@ -157,13 +157,16 @@ const NOTE = { new: 'принят', confirmed: 'принят в работу', p
 const tgSend = (chat, text) => TG && chat ? fetch(TG_API + '/bot' + TG + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) }).catch(e => console.error('tg', e.message)) : null;
 let BOT = null;
 // Уведомление о новом заказе в служебный бот (ALERT_TOKEN, ALERT_CHAT в /etc/bs.env) — только для владельца
-const ALERT_TOKEN = process.env.ALERT_TOKEN || '', ALERT_CHAT = process.env.ALERT_CHAT || '';
+const ALERT_TOKEN = process.env.ALERT_TOKEN || '', ALERT_CHAT = process.env.ALERT_CHAT || '', ALERT_CH = process.env.ALERT_CHANNEL || 'telegram', MAX_API_A = process.env.MAX_API || 'https://platform-api.max.ru';
 function alertOrder(o) {
   if (!ALERT_TOKEN || !ALERT_CHAT) return;
   const rub = n => Math.round(n).toString().replace(/\B(?=(\d{3})+$)/g, ' ') + ' ₽';
   const d = o.deliveryDate ? o.deliveryDate.split('-').reverse().join('.') : 'не указана';
   const text = '🛒 Новый заказ № ' + o.id + '\nСумма: ' + rub(o.total) + '\nДоставка: ' + d + (o.deliveryInterval ? ', ' + o.deliveryInterval : '') + '\nАдрес: ' + (o.address || 'не указан') + '\nКлиент: ' + o.name + '\nТелефон: ' + o.phone;
-  fetch(TG_API + '/bot' + ALERT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: ALERT_CHAT, text }) }).catch(e => console.error('alert', e.message));
+  const req = ALERT_CH === 'max'
+    ? fetch(MAX_API_A + '/messages?chat_id=' + encodeURIComponent(ALERT_CHAT), { method: 'POST', headers: { 'content-type': 'application/json', authorization: ALERT_TOKEN }, body: JSON.stringify({ text }) })
+    : fetch(TG_API + '/bot' + ALERT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: ALERT_CHAT, text }) });
+  req.catch(e => console.error('alert', e.message));
 }
 function notifyOrder(o, text) { const n = o.notify; if (!n || !n.chatId || !BOT) return; if (n.channel === 'telegram' || n.channel === 'max') BOT.send(n.channel, n.chatId, text) }
 const statusText = o => 'Заказ № ' + o.id + ': ' + (NOTE[o.status] || o.status) + (o.status === 'shipping' && o.deliveryInterval ? '. Доставка: ' + o.deliveryInterval : '').replace(/([^.!])$/, '$1.');

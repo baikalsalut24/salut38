@@ -16,7 +16,12 @@ if systemctl is-enabled --quiet bs-sync.timer 2>/dev/null; then
 fi
 msg=""; [ ${#P[@]} -gt 0 ] && msg=$(printf '%s; ' "${P[@]}")
 prev=$(head -1 "$ST"); last=$(sed -n 2p "$ST"); now=$(date +%s)
-send() { logger -t bs-monitor "$1"; [ -n "${ALERT_TOKEN:-}" ] && [ -n "${ALERT_CHAT:-}" ] && curl -s -m 15 "https://api.telegram.org/bot$ALERT_TOKEN/sendMessage" --data-urlencode "chat_id=$ALERT_CHAT" --data-urlencode "text=$1" >/dev/null; }
+send() { logger -t bs-monitor "$1"; [ -n "${ALERT_TOKEN:-}" ] && [ -n "${ALERT_CHAT:-}" ] || return 0
+  if [ "${ALERT_CHANNEL:-telegram}" = max ]; then
+    curl -s -m 15 -X POST "${MAX_API:-https://platform-api.max.ru}/messages?chat_id=$ALERT_CHAT" -H "Authorization: $ALERT_TOKEN" -H 'Content-Type: application/json' -d "$(python3 -c 'import json,sys;print(json.dumps({"text":sys.argv[1]}))' "$1")" >/dev/null
+  else
+    curl -s -m 15 "https://api.telegram.org/bot$ALERT_TOKEN/sendMessage" --data-urlencode "chat_id=$ALERT_CHAT" --data-urlencode "text=$1" >/dev/null
+  fi; }
 if [ -n "$msg" ]; then
   # то же самое повторно — не чаще раза в 3 часа
   if [ "$msg" != "$prev" ] || [ $((now - ${last:-0})) -gt 10800 ]; then send "⚠ Байкал Салют: $msg"; printf '%s\n%s\n' "$msg" "$now" > "$ST"; fi
