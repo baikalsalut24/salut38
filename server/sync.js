@@ -171,7 +171,6 @@ async function main() {
     const r = rs.reduce((m, x) => better(x, m) ? x : m);
     if (!(r.price > 0)) { noPrice++; continue; }
     chosen.set(b.sku, r); pr[b.sku] = r.price;
-    const ff = finOf(r.it); if (ff) fnmap[b.sku] = ff;
     const nn = cleanName(r.it.name, r.it.art); if (nn && nn !== b.name) { nmap[b.sku] = nn; if (!r.sn) renamed.push({ sku: b.sku, from: b.name, to: nn }); }
     if (r.price === b.price) same++; else diffs.push({ sku: b.sku, name: b.name, from: b.price, to: r.price, raw: r.it.price_roz, uc: r.it.unit_count, un: r.it.unit_name, pct: (r.price - b.price) / b.price });
   }
@@ -204,7 +203,7 @@ async function main() {
         catch (e) { sk.noimg++; return; }
       }
     }
-    ad.push({ sku: c.art, name: cleanName(c.it.name, c.it.art) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img), fin: finOf(c.it) });
+    ad.push({ sku: c.art, name: cleanName(c.it.name, c.it.art) || c.art, price: c.price, cats: [c.cat], brand: String(c.it.prod || '').trim(), shots: parseInt(c.it.vystrel, 10) || 0, cal: calOf(c.it.kalibr), img: IMGURL + '/' + fn + '?n=' + NORMV, src: String(c.it.img) });
   });
   // Созданные ранее карточки не пропадают, когда товар закончился у поставщика: они скрываются на сайте (hd) и возвращаются, когда товар снова в наличии.
   // Удаляем только дефектные (водяной знак / мелкая картинка), которые вы не исправили, когда товар закончился.

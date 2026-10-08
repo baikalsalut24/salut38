@@ -230,7 +230,7 @@ async function api(req, res, url) {
   if (m === 'GET' && p === '/catalog') { // сайт: что скрыто и какие цены выставлены в приложении
     if (limit('g' + ipOf(req), 120, 60e3)) return send(res, 429, {}, CORS);
     const o = {}; for (const k in cat) { const v = cat[k]; if (v.h || v.p > 0) o[k] = { ...(v.p > 0 ? { p: v.p } : {}), ...(v.h ? { h: 1 } : {}) } }
-    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, im: FEED.im, vd: FEED.vd, nm: FEED.nm, fn: FEED.fn, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad } }, { ...CORS, 'cache-control': 'no-store' });
+    refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, im: FEED.im, vd: FEED.vd, nm: FEED.nm, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad.map(a => { const { fin, ...r } = a; return r }) } }, { ...CORS, 'cache-control': 'no-store' });
   }
 
   if (m === 'GET' && p === '/api/users') return send(res, 200, users.map(pub)); // для экрана входа, без PIN
