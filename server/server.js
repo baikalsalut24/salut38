@@ -639,7 +639,7 @@ async function api(req, res, url) {
     };
     if (m === 'POST') {
       const code = normCode(b.code);
-      if (!/^[A-Z0-9\u0410-\u042f\u0401_-]{3,30}$/.test(code)) return send(res, 400, { error: 'Код: 3–30 символов, буквы, цифры, «-» или «_»' });
+      if (!/^[A-Z0-9\u0410-\u042f\u0401_-]{2,30}$/.test(code)) return send(res, 400, { error: 'Код: 2–30 символов, буквы, цифры, «-» или «_»' });
       if (promos.some(x => x.code === code || (x.aliases || []).includes(code))) return send(res, 400, { error: 'Такой код уже есть' });
       const c = check(b); if (c.error) return send(res, 400, c);
       const slug = cleanSlug(b.slug); if (slug === null) return send(res, 400, { error: 'Метка для бота: латиница, цифры, «_» или «-», 2–40 символов' }); if (slug && promos.some(x => x.slug === slug)) return send(res, 400, { error: 'Такая метка уже есть' });
