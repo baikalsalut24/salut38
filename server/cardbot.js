@@ -20,7 +20,7 @@ async function sendPhotoFile(chat, file, caption, kb, fname) { // картинк
   return jpost(TG_API + '/bot' + TG + '/sendMessage', { chat_id: chat, text: caption, ...(kb ? { reply_markup: kb } : {}) });
 }
 const IK = rows => ({ inline_keyboard: rows }), URLB = (t, u) => ({ text: t, url: u });
-const SHOP_URL = (E.SHOP_URL || SITE).replace(/\/$/, ''), WELCOME_FILE = path.join(__dirname, 'assets', 'welcome.jpg'); // SHOP_URL — куда ведут кнопки «выбрать салют / в магазин» (пока старый сайт)
+const SHOP_URL = (E.SHOP_URL || 'https://salut38.shop').replace(/\/$/, ''), WELCOME_FILE = path.join(__dirname, 'assets', 'welcome.jpg'); // SHOP_URL — куда ведут кнопки «выбрать салют / в магазин» (пока старый сайт)
 const SHOP = SHOP_URL ? [URLB('в магазин', SHOP_URL)] : [];
 const sendWelcome = chat => fs.existsSync(WELCOME_FILE) ? sendPhotoFile(chat, WELCOME_FILE, HOME_TXT, HOME_KB, 'welcome.jpg') : send('telegram', chat, HOME_TXT, WELCOME_IMG, HOME_KB);
 const HOME_KB = IK([[{ text: 'скидки', callback_data: 'disc' }, ...(SHOP_URL ? [URLB('выбрать салют', SHOP_URL)] : [])], [{ text: 'оплата, доставка', callback_data: 'pay' }], [URLB('обратиться в поддержку', SUPPORT)]]);
