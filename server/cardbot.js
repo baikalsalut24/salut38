@@ -109,6 +109,11 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     jpost(TG_API + '/bot' + TG + '/answerCallbackQuery', { callback_query_id: q.id });
     if (ctx.subs) ctx.subs.touch(q.from && q.from.id || chat, { name: q.from && q.from.first_name }, TG);
     const d = q.data;
+    if (/^(so|sn):/.test(d) && ctx.substAnswer) { // ответ клиента на замену товара: so — утвердить, sn — другая
+      const [k, oid, cid] = d.split(':'), err = ctx.substAnswer(k === 'so' ? 'ok' : 'next', oid, cid, chat);
+      if (q.message && q.message.message_id) jpost(TG_API + '/bot' + TG + '/editMessageReplyMarkup', { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
+      return err ? send('telegram', chat, err) : undefined;
+    }
     if (d === 'disc') return sendPhotoFile(chat, DISC_IMG, DISC_TXT, IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP]]));
     if (d === 'pay') return send('telegram', chat, PAY_TXT, '', IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP], [URLB('обратиться в поддержку', SUPPORT)]]));
     if (d === 'home') return sendWelcome(chat);

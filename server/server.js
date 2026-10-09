@@ -228,6 +228,85 @@ function alertText(text) { // произвольное уведомление с
 function notifyOrder(o, text) { const n = o.notify; if (!n || !n.chatId || !BOT) return; if (n.channel === 'telegram' || n.channel === 'max') BOT.send(n.channel, n.chatId, text) }
 const statusText = o => 'Заказ № ' + o.id + ': ' + (NOTE[o.status] || o.status) + (o.status === 'shipping' && o.deliveryInterval ? '. Доставка: ' + o.deliveryInterval : '').replace(/([^.!])$/, '$1.');
 const priceOf = (sku, p) => { const o = cat[sku]; return o && o.p > 0 ? o.p : p }; // цена, выставленная менеджером, главнее цены с сайта
+
+/* ---------- «Закончился»: скрытие на 15 дней и замена товара в заказе ---------- */
+const OOS_DAYS = 15;
+const oosOn = k => { const o = cat[k]; return !!(o && o.oos && Date.parse(o.oos) > Date.now()) }; // скрыт вручную как «закончился» и срок ещё идёт
+const hiddenNow = k => { const o = cat[k]; return !!(o && (o.h || oosOn(k))) };
+function sweepOos() { let n = 0; for (const k in cat) { const o = cat[k]; if (o.oos && Date.parse(o.oos) <= Date.now()) { delete o.oos; n++; if (!o.p && !o.h) delete cat[k] } } if (n) persistCat() }
+setInterval(sweepOos, 3600e3).unref(); sweepOos();
+const shotsOf = sku => { const g = gpData()[sku], r = g && (g.p || []).find(x => /выстрел/i.test(x[0])); return r ? (+String(r[1]).replace(/\D/g, '') || 0) : 0 };
+const visibleNow = b => !hiddenNow(b.sku) && !FEED.hd.includes(b.sku);
+function suggestFor(sku, exclude) { // подбор замены: та же категория, близкая цена, число выстрелов и производитель
+  const base = BASE.find(b => b.sku === sku); if (!base) return null;
+  const p0 = priceOf(sku, base.price) || 1, sh0 = shotsOf(sku); let best = null, bs = -1e9;
+  for (const b of BASE) {
+    if (b.sku === sku || exclude.includes(b.sku) || !visibleNow(b)) continue;
+    const pr = priceOf(b.sku, b.price); if (!(pr > 0) || pr < p0 * 0.5 || pr > p0 * 1.6) continue;
+    let sc = 0; if ((b.cats || []).some(c => (base.cats || []).includes(c))) sc += 25; if (b.brand && b.brand === base.brand) sc += 10;
+    const d = (pr - p0) / p0; sc -= Math.abs(d) * 60 + (d > 0 ? d * 30 : 0);
+    const sh = shotsOf(b.sku); if (sh0 && sh) sc -= Math.abs(sh - sh0) / Math.max(sh, sh0) * 30;
+    if (sc > bs) { bs = sc; best = b }
+  }
+  return best ? { sku: best.sku, name: best.name, price: priceOf(best.sku, best.price), img: FEED.im[best.sku] || best.img || '' } : null;
+}
+const imgUrl = i => !i ? '' : /^https?:/.test(i) ? i : (process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') + i : '');
+const money = n => Math.round(n).toString().replace(/\B(?=(\d{3})+$)/g, ' ') + ' ₽';
+function recalcOrder(o) {
+  const sumAll = o.items.reduce((s, i) => s + i.sum, 0); let d = o.discount || 0;
+  if (o.promo) { const pr = findPromo(o.promo); if (pr && promoState(pr) === 'ok') d = promoDiscount(pr, sumAll) }
+  o.discount = Math.max(0, Math.min(d, sumAll)); o.total = Math.round((sumAll - o.discount) * 100) / 100;
+}
+const histAdd = (o, by, note) => (o.history = o.history || []).push({ at: new Date().toISOString(), by, role: 'system', from: o.status, to: o.status, note });
+function chatOf(o) { const n = o.notify; return n && n.channel === 'telegram' && n.linked && n.chatId ? String(n.chatId) : '' }
+function sendOffer(o, c) { // клиенту в Telegram: что закончилось, чем предлагаем заменить, две кнопки
+  const of = c.offer; if (!of) return false; const chat = chatOf(o); if (!chat || !BOT) { c.noChat = true; return false }
+  const diff = (of.price - c.price) * c.qty;
+  const text = 'К сожалению, «' + c.name + '» закончился (заказ № ' + o.id + ').\n\nПредлагаем замену:\n«' + of.name + '» — ' + money(of.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\nБыло: ' + money(c.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\n' + (diff === 0 ? 'Сумма заказа не изменится.' : diff > 0 ? 'Сумма заказа увеличится на ' + money(diff) + '.' : 'Сумма заказа уменьшится на ' + money(-diff) + '.') + '\n\nУтвердить замену или подобрать другую?';
+  BOT.send('telegram', chat, text, imgUrl(of.img), { inline_keyboard: [[{ text: '✅ Утвердить замену', callback_data: 'so:' + o.id + ':' + c.id }, { text: '🔄 Другая замена', callback_data: 'sn:' + o.id + ':' + c.id }]] });
+  c.sentAt = new Date().toISOString(); c.noChat = false; return true;
+}
+function startOos(o, sku, by) {
+  const it = o.items.find(i => i.sku === sku); if (!it) return { error: 'Нет такой позиции' };
+  if (!['new', 'confirmed', 'picking'].includes(o.status)) return { error: 'Замена доступна, пока заказ не собран' };
+  o.subst = o.subst || []; if (o.subst.some(c => c.sku === sku && (c.st === 'wait' || c.st === 'manual'))) return { error: 'По этой позиции замена уже предлагается' };
+  const k = cat[sku] || (cat[sku] = {}); k.oos = new Date(Date.now() + OOS_DAYS * 864e5).toISOString(); k.by = by; k.at = new Date().toISOString(); persistCat();
+  const c = { id: String((o.subst.reduce((m, x) => Math.max(m, +x.id || 0), 0)) + 1), sku, name: it.name, qty: it.qty, price: it.price, tried: [], st: 'wait', at: new Date().toISOString() };
+  o.subst.push(c);
+  const off = suggestFor(sku, [...o.items.map(i => i.sku)]);
+  if (off) { c.offer = off; c.tried.push(off.sku); histAdd(o, by, 'Закончился: ' + it.name + '. Предложена замена: ' + off.name); sendOffer(o, c) }
+  else { c.st = 'manual'; histAdd(o, by, 'Закончился: ' + it.name + '. Подходящей замены автоматически не нашлось') }
+  o.updatedAt = new Date().toISOString(); persist();
+  alertText('📦 В заказе № ' + o.id + ' закончился товар «' + it.name + '». ' + (c.offer ? (c.noChat ? 'Клиент не в Telegram — предложите замену «' + c.offer.name + '» по телефону: ' + o.phone : 'Клиенту отправлена замена «' + c.offer.name + '», ждём ответ.') : 'Автозамены нет — свяжитесь с клиентом: ' + o.phone));
+  return { ok: true };
+}
+function acceptSubst(o, c, by) {
+  if (!c || c.st !== 'wait' || !c.offer) return { error: 'Замена уже обработана' };
+  const i = o.items.findIndex(x => x.sku === c.sku); if (i < 0) return { error: 'Позиции уже нет в заказе' };
+  const of = c.offer; o.items[i] = { sku: of.sku, name: of.name, qty: c.qty, price: of.price, sum: Math.round(of.price * c.qty * 100) / 100, picked: false };
+  recalcOrder(o); c.st = 'ok'; c.final = of; c.by = by; c.doneAt = new Date().toISOString();
+  histAdd(o, by, 'Замена утверждена (' + by + '): ' + c.name + ' → ' + of.name + '. Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString(); persist();
+  notifyOrder(o, 'Заказ № ' + o.id + ': замена утверждена — «' + of.name + '». Сумма заказа: ' + money(o.total) + '.');
+  alertText('✅ Заказ № ' + o.id + ': замена «' + c.name + '» → «' + of.name + '» утверждена (' + by + '). Сумма: ' + money(o.total));
+  return { ok: true };
+}
+function nextSubst(o, c, by, sku) {
+  if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Замена уже обработана' };
+  let off = null;
+  if (sku) { const b = BASE.find(x => x.sku === sku); if (!b) return { error: 'Товар не найден' }; if (!visibleNow(b)) return { error: 'Этот товар сейчас скрыт или закончился' }; off = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' } }
+  else if (c.tried.length < 4) off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried]);
+  if (!off) { c.st = 'manual'; c.offer = null; histAdd(o, by, 'Подходящих замен для «' + c.name + '» больше нет — нужна связь с клиентом'); o.updatedAt = new Date().toISOString(); persist();
+    if (by === 'клиент') { notifyOrder(o, 'Заказ № ' + o.id + ': подходящих замен больше не нашли. Оператор свяжется с вами по телефону ' + o.phone + '.'); alertText('⚠️ Заказ № ' + o.id + ': клиент отказался от замены «' + c.name + '», вариантов больше нет. Позвоните: ' + o.phone) } return { ok: true } }
+  c.offer = off; c.st = 'wait'; c.tried.push(off.sku); histAdd(o, by, 'Другая замена для «' + c.name + '»: ' + off.name); o.updatedAt = new Date().toISOString();
+  const sent = sendOffer(o, c); persist();
+  if (by === 'клиент') alertText('🔄 Заказ № ' + o.id + ': клиент просит другую замену для «' + c.name + '». Предложено: «' + off.name + '».');
+  return { ok: true, sent };
+}
+function substAnswer(act, orderId, caseId, chat) { // нажатие кнопок клиента в боте
+  const o = orders[orderId], c = o && (o.subst || []).find(x => x.id === caseId); if (!c || chatOf(o) !== String(chat)) return 'Это предложение уже недоступно.';
+  if (c.st !== 'wait') return 'Это предложение уже обработано.';
+  const r = act === 'ok' ? acceptSubst(o, c, 'клиент') : nextSubst(o, c, 'клиент'); return r.error ? r.error : '';
+}
 const digits = s => String(s || '').replace(/\D/g, '').replace(/^8(?=\d{10}$)/, '7');
 for (const k in carts) if (Date.now() - Date.parse(carts[k].updatedAt) > 30 * 864e5) delete carts[k]; // брошенные корзины старше 30 дней убираем
 function cartItems(items, fix) { return (Array.isArray(items) ? items.slice(0, 80) : []).map(i => ({ sku: clean(i.sku, 40), name: clean(i.name, 200), qty: Math.max(1, Math.min(999, Math.floor(+i.qty || 1))), price: Math.max(0, fix ? priceOf(clean(i.sku, 40), +i.price || 0) : +i.price || 0) })).map(i => ({ ...i, sum: i.price * i.qty })) }
@@ -306,7 +385,7 @@ async function api(req, res, url) {
 
   if (m === 'GET' && p === '/catalog') { // сайт: что скрыто и какие цены выставлены в приложении
     if (limit('g' + ipOf(req), 120, 60e3)) return send(res, 429, {}, CORS);
-    const o = {}; for (const k in cat) { const v = cat[k]; if (v.h || v.p > 0) o[k] = { ...(v.p > 0 ? { p: v.p } : {}), ...(v.h ? { h: 1 } : {}) } }
+    const o = {}; for (const k in cat) { const v = cat[k], hh = v.h || oosOn(k); if (hh || v.p > 0) o[k] = { ...(v.p > 0 ? { p: v.p } : {}), ...(hh ? { h: 1 } : {}) } }
     refreshFeed(); return send(res, 200, { o, f: { t: FEED.t, im: FEED.im, vd: FEED.vd, du: durMap(), pm: pmMap(), nm: FEED.nm, pr: FEED.pr, hd: FEED.hd, ad: FEED.ad.map(a => { const { fin, ...r } = a; return r }) } }, { ...CORS, 'cache-control': 'no-store' });
   }
 
@@ -334,16 +413,36 @@ async function api(req, res, url) {
     return send(res, 200, { orders: list.slice(0, 400).map(o => view(o, role)), couriers: isM ? users.filter(u => u.role === 'courier').map(pub) : undefined, now: Date.now() });
   }
 
-  let mm = p.match(/^\/api\/orders\/([^/]+)(?:\/(status|pick))?$/);
+  let mm = p.match(/^\/api\/orders\/([^/]+)(?:\/(status|pick|oos|subst))?$/);
   if (mm) {
     const o = orders[decodeURIComponent(mm[1])]; if (!o) return send(res, 404, { error: 'Заказ не найден' });
     if (SEES[role] && !SEES[role].includes(o.status)) return send(res, 403, { error: 'Нет доступа' });
     const b = m === 'GET' ? {} : await body(req).catch(() => ({}));
     if (m === 'GET' && !mm[2]) return send(res, 200, view(o, role));
+    if (mm[2] === 'subst' && m === 'GET') { // поиск товара для ручной замены
+      if (!isM) return send(res, 403, { error: 'Только менеджер' }); refreshFeed();
+      const q = String(url.searchParams.get('q') || '').toLowerCase().trim(); if (q.length < 2) return send(res, 200, []);
+      return send(res, 200, BASE.filter(b => visibleNow(b) && (b.name.toLowerCase().includes(q) || b.sku.toLowerCase().includes(q))).slice(0, 15).map(b => ({ sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' })));
+    }
+    if (mm[2] === 'oos' && m === 'POST') { // кнопка «Закончился»
+      if (!isM) return send(res, 403, { error: 'Только менеджер' }); refreshFeed();
+      const r = startOos(o, clean(b.sku, 40), me.name); return r.error ? send(res, 400, r) : send(res, 200, view(o, role));
+    }
+    if (mm[2] === 'subst' && m === 'POST') { // действия менеджера по замене
+      if (!isM) return send(res, 403, { error: 'Только менеджер' }); refreshFeed();
+      const c = (o.subst || []).find(x => x.id === String(b.case)); if (!c) return send(res, 404, { error: 'Замена не найдена' });
+      let r;
+      if (b.action === 'accept') r = acceptSubst(o, c, me.name);
+      else if (b.action === 'next') r = nextSubst(o, c, me.name, b.sku ? clean(b.sku, 40) : '');
+      else if (b.action === 'done' || b.action === 'cancel') { if (c.st === 'ok' || c.st === 'done' || c.st === 'cancel') return send(res, 400, { error: 'Уже обработано' }); c.st = b.action === 'done' ? 'done' : 'cancel'; histAdd(o, me.name, (b.action === 'done' ? 'Замена решена вручную: ' : 'Замена отменена: ') + c.name); o.updatedAt = new Date().toISOString(); persist(); r = { ok: true } }
+      else return send(res, 400, { error: 'Неизвестное действие' });
+      return r.error ? send(res, 400, r) : send(res, 200, view(o, role));
+    }
 
     if (m === 'POST' && mm[2] === 'status') {
       const to = b.status; if (!STATUS[to] || !(canMove(role, o.status, to) || (b.force === true && role === 'admin' && to !== o.status))) return send(res, 403, { error: 'Этот переход вам недоступен' });
       const note = clean(b.note, 300);
+      if (to !== 'cancelled' && to !== 'failed' && (o.subst || []).some(c => c.st === 'wait' || c.st === 'manual') && !note) return send(res, 400, { error: 'Есть позиция без утверждённой замены. Решите её или напишите комментарий, чтобы продолжить.' });
       if ((to === 'failed' || to === 'cancelled') && !note) return send(res, 400, { error: 'Укажите причину' });
       if (to === 'packed' && !isM && !o.items.every(i => i.picked)) return send(res, 400, { error: 'Отметьте все позиции собранными' });
       if (to === 'packed' && isM && !o.items.every(i => i.picked) && !note) return send(res, 400, { error: 'Не все позиции отмечены собранными. Напишите комментарий, чтобы продолжить.' });
@@ -446,14 +545,14 @@ async function api(req, res, url) {
   if (p === '/api/catalog') { // все товары: видимость на сайте и цена
     refreshFeed();
     if (!isM) return send(res, 403, { error: 'Только менеджер' });
-    if (m === 'GET') return send(res, 200, BASE.map(b => { const o = cat[b.sku] || {}; return { sku: b.sku, name: b.name, cats: b.cats, brand: b.brand, img: FEED.im[b.sku] || b.img, vid: FEED.vd[b.sku] || '', v: b.v, defect: defectOf(b.sku) || null, nostock: FEED.hd.includes(b.sku), own: AUTO[b.sku] && OWN[b.sku] ? { img: !!OWN[b.sku].img, vid: !!OWN[b.sku].vid, okI: !!OWN[b.sku].okI, okV: !!OWN[b.sku].okV } : null, base: b.price, price: o.p > 0 ? o.p : b.price, custom: o.p > 0, hidden: !!o.h } }));
+    if (m === 'GET') return send(res, 200, BASE.map(b => { const o = cat[b.sku] || {}; return { sku: b.sku, name: b.name, cats: b.cats, brand: b.brand, img: FEED.im[b.sku] || b.img, vid: FEED.vd[b.sku] || '', v: b.v, defect: defectOf(b.sku) || null, nostock: FEED.hd.includes(b.sku), own: AUTO[b.sku] && OWN[b.sku] ? { img: !!OWN[b.sku].img, vid: !!OWN[b.sku].vid, okI: !!OWN[b.sku].okI, okV: !!OWN[b.sku].okV } : null, base: b.price, price: o.p > 0 ? o.p : b.price, custom: o.p > 0, hidden: !!o.h || oosOn(b.sku), oos: oosOn(b.sku) ? o.oos : '' } }));
     if (m === 'PATCH') {
       const b = await body(req).catch(() => ({})), skus = (Array.isArray(b.skus) ? b.skus : [b.sku]).map(x => clean(x, 40)).filter(x => BASE.some(i => i.sku === x)).slice(0, 800);
       if (!skus.length) return send(res, 404, { error: 'Товар не найден' });
       let price; if ('price' in b) { if (b.price === null || b.price === '') price = 0; else { price = Math.round(+b.price); if (!(price >= 1 && price <= 1e7)) return send(res, 400, { error: 'Цена в рублях, от 1' }) } }
       const now = new Date().toISOString();
-      for (const k of skus) { const o = cat[k] || (cat[k] = {}); if (price !== undefined) { if (price > 0) o.p = price; else delete o.p } if ('hidden' in b) { if (b.hidden) o.h = 1; else delete o.h } o.by = me.name; o.at = now; if (!o.p && !o.h) delete cat[k] }
-      persistCat(); return send(res, 200, { ok: true, items: skus.map(k => { const bi = BASE.find(x => x.sku === k), o = cat[k] || {}; return { sku: k, base: bi.price, price: o.p > 0 ? o.p : bi.price, custom: o.p > 0, hidden: !!o.h } }) });
+      for (const k of skus) { const o = cat[k] || (cat[k] = {}); if (price !== undefined) { if (price > 0) o.p = price; else delete o.p } if ('hidden' in b) { if (b.hidden) o.h = 1; else { delete o.h; delete o.oos } } o.by = me.name; o.at = now; if (!o.p && !o.h && !oosOn(k)) delete cat[k] }
+      persistCat(); return send(res, 200, { ok: true, items: skus.map(k => { const bi = BASE.find(x => x.sku === k), o = cat[k] || {}; return { sku: k, base: bi.price, price: o.p > 0 ? o.p : bi.price, custom: o.p > 0, hidden: !!o.h || oosOn(k), oos: oosOn(k) ? o.oos : '' } }) });
     }
   }
 
@@ -554,4 +653,4 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
     const pr = o.promo ? findPromo(o.promo) : null; return pr && pr.owner && pr.owner.ch === 'telegram' ? String(pr.owner.id) : '';
   };
   SUBS = require('./subs')({ DATA, alert: alertText, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
-  BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), orders: () => orders, persist, statusText, irkToday }); BOT.start() });
+  BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), orders: () => orders, persist, statusText, irkToday, substAnswer }); BOT.start() });
