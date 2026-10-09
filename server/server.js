@@ -240,23 +240,23 @@ function sweepOos() { let n = 0; for (const k in cat) { const o = cat[k]; if (o.
 setInterval(sweepOos, 3600e3).unref(); sweepOos();
 const shotsOf = sku => { const g = gpData()[sku], r = g && (g.p || []).find(x => /выстрел/i.test(x[0])); return r ? (+String(r[1]).replace(/\D/g, '') || 0) : 0 };
 const visibleNow = b => !hiddenNow(b.sku) && !FEED.hd.includes(b.sku);
-const PM_NUM = /выстрел|калибр|высот|длительн|время|эффект|мощност|залп|диаметр/i; // числовые характеристики для сравнения
+const PM_NUM = /выстрел|калибр|высот|длительн|время|продолж|эффект|мощност|залп|диаметр/i; // числовые характеристики для сравнения
 const numsOf = sku => { const g = gpData()[sku], o = {}; for (const r of (g && g.p) || []) { if (!PM_NUM.test(r[0])) continue; const v = parseFloat(String(r[1]).replace(',', '.').replace(/[^\d.:]/g, '').replace(/^(\d+):(\d+)$/, (m, x, y) => +x * 60 + +y)); if (v > 0) o[String(r[0]).toLowerCase().trim()] = v } return o };
-function suggestFor(sku, exclude) { // замена: та же категория, близкие характеристики (выстрелы, калибр, высота, время), ближайшая цена; бренд — любой, свой чуть предпочтительнее
+function suggestFor(sku, exclude) { // замена: та же категория; характеристики не ниже (если таких нет — ближайший послабее); из подходящих ближайший по цене; бренд любой
   const base = BASE.find(b => b.sku === sku); if (!base) return null;
-  const p0 = priceOf(sku, base.price) || 1, n0 = numsOf(sku), c0 = base.cats || []; let best = null, bs = -1e9;
+  const p0 = priceOf(sku, base.price) || 1, n0 = numsOf(sku), c0 = catOf(sku), keys = Object.keys(n0); let best = null, bs = -1e9, weak = null, ws = -1e9;
   for (const b of BASE) {
     if (b.sku === sku || exclude.includes(b.sku) || !visibleNow(b)) continue;
-    const pr = priceOf(b.sku, b.price); if (!(pr > 0) || pr < p0 * 0.5 || pr > p0 * 1.6) continue;
-    const shared = (b.cats || []).filter(c => c0.includes(c)).length; if (!shared) continue; // только своя категория
-    let sc = 20 + shared * 5; if (b.brand && b.brand === base.brand) sc += 3; // приоритет: характеристики, затем цена, затем бренд
-    const d = (pr - p0) / p0; sc -= Math.abs(d) * 30 + (d > 0 ? d * 12 : 0);
-    const n1 = numsOf(b.sku); let cnt = 0, diff = 0;
-    for (const k in n0) if (n1[k]) { cnt++; diff += Math.abs(n1[k] - n0[k]) / Math.max(n1[k], n0[k]) }
-    if (cnt) sc -= diff / cnt * 120; else if (Object.keys(n0).length) sc -= 25;
-    if (sc > bs) { bs = sc; best = b }
+    const pr = priceOf(b.sku, b.price); if (!(pr > 0)) continue;
+    if (!catOf(b.sku).some(c => c0.includes(c))) continue; // только своя категория
+    const n1 = numsOf(b.sku), cmpk = keys.filter(k => n1[k]); let ok = !keys.length || cmpk.length > 0, lack = 0;
+    for (const k of cmpk) { if (n1[k] < n0[k] * 0.999) { ok = false; lack += (n0[k] - n1[k]) / n0[k] } }
+    const d = Math.abs(pr - p0) / p0, br = b.brand && b.brand === base.brand ? 0.03 : 0;
+    if (ok) { const sc = -d + br; if (sc > bs) { bs = sc; best = b } }
+    else { const sc = -(lack * 3 + d) + br - (cmpk.length ? 0 : 5); if (sc > ws) { ws = sc; weak = b } }
   }
-  return best ? { sku: best.sku, name: best.name, price: priceOf(best.sku, best.price), img: FEED.im[best.sku] || best.img || '' } : null;
+  const pick = best || weak; if (!pick) return null;
+  return { sku: pick.sku, name: pick.name, price: priceOf(pick.sku, pick.price), img: FEED.im[pick.sku] || pick.img || '', ...(best ? {} : { weaker: true }) };
 }
 const imgUrl = i => !i ? '' : /^https?:/.test(i) ? i : (process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') + i : '');
 const money = n => Math.round(n).toString().replace(/\B(?=(\d{3})+$)/g, ' ') + ' ₽';
@@ -267,40 +267,59 @@ function recalcOrder(o) {
 }
 const histAdd = (o, by, note) => (o.history = o.history || []).push({ at: new Date().toISOString(), by, role: 'system', from: o.status, to: o.status, note });
 function chatOf(o) { const n = o.notify; return n && n.channel === 'telegram' && n.linked && n.chatId ? String(n.chatId) : '' }
+const hx = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const SITE_BASE = () => (process.env.SITE_URL || process.env.SHOP_URL || 'https://salut38.shop').replace(/\/$/, '');
+const APP_BASE = () => { const b = SITE_BASE(); return /\/\/app\./.test(b) ? b : b.replace('//', '//app.') };
+const pLink = (name, sku) => '<a href="' + SITE_BASE() + '/#p/' + encodeURIComponent(sku) + '">«' + hx(name) + '»</a>';
+function facts(sku) { // краткие характеристики одной строкой: выстрелы · калибр · время
+  const g = gpData()[sku], rows = (g && g.p) || [], f = re => rows.find(r => re.test(r[0])), out = [];
+  const sh = f(/выстрел|залп/i), ca = f(/калибр/i), tm = f(/длительн|время|продолж/i);
+  if (sh && sh[1]) out.push(hx(sh[1]) + ' ' + hx(sh[2] || 'выстрелов'));
+  if (ca && ca[1]) out.push('калибр ' + hx(ca[1]) + hx(ca[2] || ''));
+  if (tm && tm[1]) out.push(hx(tm[1]) + ' ' + hx(tm[2] || 'сек'));
+  return out.join(' · ');
+}
+const catName = sku => catOf(sku)[0] || '';
+function prodBlock(mark, sku, name, price) { return mark + ' · ' + hx(catName(sku)) + '\n' + pLink(name, sku) + (facts(sku) ? '\n<i>' + facts(sku) + '</i> · ' : '\n') + money(price) }
+const endedBlock = c => prodBlock('❌ Закончился', c.sku, c.name, c.price);
+const offerBlock = of => prodBlock('✅ Предложение автозамены', of.sku, of.name, of.price);
 const SUBST_KB = (o, c) => { const id = o.id + ':' + c.id, del = [{ text: '✖ Удалить из заказа', callback_data: 'sd:' + id }];
   return { inline_keyboard: c.autoOff ? [[{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + id }], del]
-    : [[{ text: '✅ Утвердить замену', callback_data: 'so:' + id }], [{ text: '🔄 Следующая автозамена', callback_data: 'sn:' + id }], [{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + id }], del] } };
-function sendOffer(o, c, remind) { // клиенту в Telegram: что закончилось и чем предлагаем заменить; после 4 нажатий «следующая автозамена» остаются только «выбрать самостоятельно» и «удалить»
+    : [[{ text: '✅ Утвердить замену', callback_data: 'so:' + id }], [{ text: '🔄 Другой вариант', callback_data: 'sn:' + id }], [{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + id }], del] } };
+function orderLink(o) { if (!o.vt) { o.vt = crypto.randomBytes(12).toString('hex'); persist() } return APP_BASE() + '/o/' + o.vt }
+const ORDER_KB = o => ({ inline_keyboard: [[{ text: '📄 Состав заказа', url: orderLink(o) }]] });
+function sendOffer(o, c, remind) { // клиенту в Telegram: что закончилось и чем предлагаем заменить; после трёх нажатий «Другой вариант» остаются «выбрать самостоятельно» и «удалить»
   const of = c.offer; if (!of && !c.autoOff) return false; const chat = chatOf(o); if (!chat || !BOT) { c.noChat = true; return false }
-  const pre = remind ? '⏰ Напоминаем: нужно решить с заменой по заказу № ' + o.id + '.\n\n' : '';
-  let text, photo = '';
-  if (of) { const diff = (of.price - c.price) * c.qty; photo = imgUrl(of.img);
-    text = pre + 'К сожалению, «' + c.name + '» закончился (заказ № ' + o.id + ').\n\nПредлагаем замену:\n«' + of.name + '» — ' + money(of.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\nБыло: ' + money(c.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\n' + (diff === 0 ? 'Сумма заказа не изменится.' : diff > 0 ? 'Сумма заказа увеличится на ' + money(diff) + '.' : 'Сумма заказа уменьшится на ' + money(-diff) + '.') + '\n\nУтвердить замену, подобрать другую или выбрать товар самостоятельно?' }
-  else text = pre + 'К сожалению, «' + c.name + '» закончился (заказ № ' + o.id + '), а автоматический подбор замены завершён.\n\nВыберите товар самостоятельно из каталога или удалите позицию из заказа.';
-  BOT.send('telegram', chat, text, photo, SUBST_KB(o, c));
+  const pre = remind ? '⏰ <b>Ждём вашего решения</b> · заказ № ' + hx(o.id) + '\n\n' : '<b>Заказ № ' + hx(o.id) + '</b>\n\n';
+  const text = pre + endedBlock(c) + '\n\n' + (of ? offerBlock(of) : 'Автоматический подбор закончился. Выберите товар самостоятельно из категории «' + hx(catName(c.sku)) + '» или удалите позицию из заказа.');
+  BOT.send('telegram', chat, text, of ? imgUrl(of.img) : '', SUBST_KB(o, c), true);
   c.sentAt = new Date().toISOString(); c.noChat = false; if (!remind) { c.rem = 0; c.remAt = ''; c.cold = false } return true;
 }
+function clientMsg(o, text, kb) { const chat = chatOf(o); if (chat && BOT) BOT.send('telegram', chat, text, '', kb, true) }
 const supNeed = (c, kind) => { c.sup = { kind, at: new Date().toISOString() }; c.supDone = false }; // вручную передаём заказы поставщику — нужно сообщить ему об изменении
 const catOf = sku => { const b = BASE.find(x => x.sku === sku); return b ? (b.cats || []).filter(x => x !== 'Хит продаж') : [] };
 function prodInfo(sku, name, price) { // карточка товара для сравнения «было / предложено»
   const b = BASE.find(x => x.sku === sku) || {}, g = gpData()[sku], specs = ((g && g.p) || []).slice(0, 16).map(r => [String(r[0]), String(r[1]) + (r[2] ? ' ' + r[2] : '')]);
   return { sku, name: name || b.name || sku, brand: b.brand || '', cat: (catOf(sku)[0]) || '', price, img: FEED.im[sku] || b.img || '', specs };
 }
-function selfList(o, c, page) { // весь список товаров из категории закончившегося
-  const cs = catOf(c.sku), inO = o.items.map(i => i.sku);
-  const l = BASE.filter(b => b.sku !== c.sku && !inO.includes(b.sku) && visibleNow(b) && (b.cats || []).some(x => cs.includes(x))).map(b => ({ b, pr: priceOf(b.sku, b.price) })).filter(x => x.pr > 0).sort((x, y) => Math.abs(x.pr - c.price) - Math.abs(y.pr - c.price));
-  const N = 8, pages = Math.max(1, Math.ceil(l.length / N)); page = Math.max(0, Math.min(pages - 1, +page || 0));
-  const rows = l.slice(page * N, page * N + N).map(x => [{ text: (x.b.name.length > 34 ? x.b.name.slice(0, 33) + '…' : x.b.name) + ' — ' + money(x.pr), callback_data: 'sc:' + o.id + ':' + c.id + ':' + x.b.sku }]);
+function selfList(o, c, page) { // весь список товаров из категории; показ начинаем с цены закончившегося товара минус 30%
+  const cs = catOf(c.sku), inO = o.items.map(i => i.sku), lo = c.price * 0.7;
+  const all = BASE.filter(b => b.sku !== c.sku && !inO.includes(b.sku) && visibleNow(b) && catOf(b.sku).some(x => cs.includes(x))).map(b => ({ b, pr: priceOf(b.sku, b.price) })).filter(x => x.pr > 0);
+  const up = all.filter(x => x.pr >= lo).sort((x, y) => x.pr - y.pr), down = all.filter(x => x.pr < lo).sort((x, y) => y.pr - x.pr), l = up.concat(down);
+  const N = 5, pages = Math.max(1, Math.ceil(l.length / N)); page = Math.max(0, Math.min(pages - 1, +page || 0));
+  const part = l.slice(page * N, page * N + N);
+  const lines = part.map((x, i) => '<b>' + (i + 1) + '.</b> ' + pLink(x.b.name, x.b.sku) + ' · ' + money(x.pr) + (facts(x.b.sku) ? '\n<i>' + facts(x.b.sku) + '</i>' : '')).join('\n');
+  const rows = []; if (part.length) rows.push(part.map((x, i) => ({ text: String(i + 1), callback_data: 'sc:' + o.id + ':' + c.id + ':' + x.b.sku })));
   const nav = []; if (page > 0) nav.push({ text: '◀ Назад', callback_data: 'sp:' + o.id + ':' + c.id + ':' + (page - 1) }); if (page < pages - 1) nav.push({ text: 'Дальше ▶', callback_data: 'sp:' + o.id + ':' + c.id + ':' + (page + 1) });
   if (nav.length) rows.push(nav); rows.push([{ text: '✖ Удалить из заказа', callback_data: 'sd:' + o.id + ':' + c.id }]);
-  return { text: l.length ? 'Выберите замену для «' + c.name + '» (' + (cs[0] || 'каталог') + '), по близости к цене. Страница ' + (page + 1) + ' из ' + pages + ':' : 'В этой категории сейчас нет подходящих товаров. Можно удалить позицию из заказа — или напишите нам, оператор поможет.', kb: { inline_keyboard: rows }, list: true };
+  return { text: '<b>Выберите замену</b>\n' + endedBlock(c) + '\n\n' + (l.length ? lines + '\n\n<i>Категория «' + hx(cs[0] || '') + '» · от цены чуть ниже вашей · стр. ' + (page + 1) + ' из ' + pages + '</i>' : 'В этой категории сейчас нет подходящих товаров. Можно удалить позицию из заказа или написать нам сюда, оператор поможет.'), kb: { inline_keyboard: rows }, list: true, html: true };
 }
 function removeItem(o, c, by) {
   if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Позиция уже обработана' };
   const i = o.items.findIndex(x => x.sku === c.sku); if (i < 0) return { error: 'Позиции уже нет в заказе' };
   o.items.splice(i, 1); recalcOrder(o); c.st = 'removed'; c.by = by; c.doneAt = new Date().toISOString(); if (!o.items.length) o.supCancel = { at: c.doneAt, done: false }; // поставщику сообщаем только если заказ опустел целиком
   histAdd(o, by, 'Позиция «' + c.name + '» удалена из заказа (' + by + '). Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString(); persist();
-  notifyOrder(o, 'Заказ № ' + o.id + ': позиция «' + c.name + '» удалена. Сумма заказа: ' + money(o.total) + '.');
+  clientMsg(o, '<b>Позиция удалена</b> из заказа № ' + hx(o.id) + ':\n' + pLink(c.name, c.sku) + '\n\nАктуальный состав заказа можно посмотреть и скачать в PDF.', ORDER_KB(o));
   alertText('✖ Заказ № ' + o.id + ': «' + c.name + '» удалена из заказа (' + by + '). ' + (o.items.length ? 'Сумма: ' + money(o.total) + '.' : 'В заказе не осталось позиций! Заказ отменён клиентом полностью — уведомите поставщика (список «Уведомить поставщика»).'));
   return { ok: true };
 }
@@ -324,7 +343,7 @@ function acceptSubst(o, c, by) {
   const of = c.offer; o.items[i] = { sku: of.sku, name: of.name, qty: c.qty, price: of.price, sum: Math.round(of.price * c.qty * 100) / 100, picked: false };
   recalcOrder(o); c.st = 'ok'; c.final = of; c.by = by; c.doneAt = new Date().toISOString(); c.self = false; supNeed(c, 'replace');
   histAdd(o, by, 'Замена утверждена (' + by + '): ' + c.name + ' → ' + of.name + '. Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString(); persist();
-  notifyOrder(o, 'Заказ № ' + o.id + ': замена утверждена — «' + of.name + '». Сумма заказа: ' + money(o.total) + '.');
+  clientMsg(o, '✅ <b>Готово!</b> Заменили в заказе № ' + hx(o.id) + ':\n\n❌ ' + pLink(c.name, c.sku) + '\n✅ ' + pLink(of.name, of.sku) + '\n\nАктуальный состав заказа можно посмотреть и скачать в PDF.', ORDER_KB(o));
   alertText('✅ Заказ № ' + o.id + ': замена «' + c.name + '» → «' + of.name + '» утверждена (' + by + '). Сумма: ' + money(o.total));
   return { ok: true };
 }
@@ -358,13 +377,13 @@ function substAnswer(act, orderId, caseId, chat, arg) { // нажатия кно
   const o = orders[orderId], c = o && (o.subst || []).find(x => x.id === caseId); if (!c || chatOf(o) !== String(chat)) return 'Это предложение уже недоступно.';
   if (c.st !== 'wait') return 'Это предложение уже обработано.';
   if (act === 'self' || act === 'list') { if (!c.self) { c.self = true; histAdd(o, 'клиент', 'Клиент выбирает замену для «' + c.name + '» самостоятельно'); persist() } return selfList(o, c, act === 'list' ? arg : 0) }
-  if (act === 'pick') { const b = BASE.find(x => x.sku === arg); if (!b || !visibleNow(b)) return 'Этот товар недоступен, выберите другой.'; const pr = priceOf(b.sku, b.price), diff = (pr - c.price) * c.qty;
-    return { text: 'Заменить «' + c.name + '» на «' + b.name + '» — ' + money(pr) + (c.qty > 1 ? ' × ' + c.qty : '') + '?\n' + (diff === 0 ? 'Сумма заказа не изменится.' : diff > 0 ? 'Сумма заказа увеличится на ' + money(diff) + '.' : 'Сумма заказа уменьшится на ' + money(-diff) + '.'), photo: imgUrl(FEED.im[b.sku] || b.img),
+  if (act === 'pick') { const b = BASE.find(x => x.sku === arg); if (!b || !visibleNow(b)) return 'Этот товар недоступен, выберите другой.'; const pr = priceOf(b.sku, b.price);
+    return { text: '<b>Заменить на выбранный товар?</b>\n\n' + endedBlock(c) + '\n\n' + prodBlock('✅ Ваш выбор', b.sku, b.name, pr), photo: imgUrl(FEED.im[b.sku] || b.img), html: true,
       kb: { inline_keyboard: [[{ text: '✅ Да, заменить', callback_data: 'sy:' + o.id + ':' + c.id + ':' + b.sku }], [{ text: '↩ К списку', callback_data: 'sp:' + o.id + ':' + c.id + ':0' }]] } } }
   if (act === 'yes') { const b = BASE.find(x => x.sku === arg); if (!b || !visibleNow(b)) return 'Этот товар недоступен, выберите другой.';
     c.offer = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' }; if (!c.tried.includes(b.sku)) c.tried.push(b.sku); c.chosen = true;
     const r = acceptSubst(o, c, 'клиент'); return r.error ? r.error : ''; }
-  if (act === 'del') return { text: 'Удалить «' + c.name + '» из заказа № ' + o.id + '?', kb: { inline_keyboard: [[{ text: '✖ Да, удалить', callback_data: 'sz:' + o.id + ':' + c.id }], [{ text: '↩ Нет, вернуться', callback_data: 'sp:' + o.id + ':' + c.id + ':0' }]] } };
+  if (act === 'del') return { text: '<b>Удалить из заказа?</b>\n\n' + endedBlock(c), html: true, kb: { inline_keyboard: [[{ text: '✖ Да, удалить', callback_data: 'sz:' + o.id + ':' + c.id }], [{ text: '↩ Нет, вернуться', callback_data: 'sp:' + o.id + ':' + c.id + ':0' }]] } };
   if (act === 'delyes') { const r = removeItem(o, c, 'клиент'); return r.error ? r.error : ''; }
   const r = act === 'ok' ? acceptSubst(o, c, 'клиент') : nextSubst(o, c, 'клиент'); return r.error ? r.error : '';
 }
@@ -714,6 +733,19 @@ function stat(req, res, url) {
   });
 }
 
+function orderPage(req, res, url) { // публичная страница состава заказа по длинной ссылке: /o/<код>
+  if (limit('o' + ipOf(req), 60, 60e3)) { res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('Слишком много запросов') }
+  const t = decodeURIComponent(url.pathname.slice(3)).replace(/[^a-f0-9]/gi, ''), o = t.length >= 16 && Object.values(orders).find(x => x.vt === t);
+  const H = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex, nofollow', 'referrer-policy': 'no-referrer' };
+  if (!o) { res.writeHead(404, H); return res.end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Заказ не найден</title><body style="font-family:sans-serif;padding:30px">Заказ не найден. Проверьте ссылку или напишите нам в бота.</body>') }
+  const repl = new Set((o.subst || []).filter(c => c.st === 'ok' && c.final).map(c => c.final.sku));
+  const rows = o.items.map(i => '<div class="it"><div><b>' + hx(i.name) + '</b>' + (repl.has(i.sku) ? '<span class="ch">замена</span>' : '') + '<small>' + hx(catOf(i.sku)[0] || '') + ' · ' + hx(i.sku) + '</small></div><u>' + money(i.price) + ' × ' + i.qty + '</u></div>').join('');
+  const disc = o.discount > 0 ? '<div class="it"><div>' + (o.discountNote ? hx(o.discountNote) : 'Скидка по промокоду<small>' + hx(o.promo || '') + '</small>') + '</div><u>−' + money(o.discount) + '</u></div>' : '';
+  const dd = o.deliveryDate ? String(o.deliveryDate).split('-').reverse().join('.') + (o.deliveryInterval ? ', ' + hx(o.deliveryInterval) : '') : '';
+  const pay = { unpaid: 'оплата при получении', partial: 'частично оплачен', paid: 'оплачен' }[o.pay] || '';
+  const html = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Заказ № ' + hx(o.id) + '</title><style>*{box-sizing:border-box}body{margin:0;background:#F3F5FA;color:#10162a;font:16px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif}.hh{background:#080C16;color:#fff;padding:14px 18px;font-weight:800;font-size:18px}.hh b{color:#FFD21F}.w{max-width:640px;margin:0 auto;padding:18px}h1{font-size:24px;margin:4px 0}.st{display:inline-block;background:#FFD21F;border-radius:8px;padding:4px 10px;font-weight:800;font-size:13px;margin:4px 0 14px}.it{background:#fff;border:1px solid #dfe3ee;border-radius:12px;padding:11px 14px;margin-bottom:8px;display:flex;justify-content:space-between;gap:10px}.it small{display:block;color:#7a84a3;font-size:12px;margin-top:2px}.it u{text-decoration:none;font-weight:700;white-space:nowrap}.ch{font-size:11px;background:#E6F6EC;color:#1f7a45;border-radius:6px;padding:2px 7px;font-weight:700;margin-left:6px}.tt{display:flex;justify-content:space-between;font-weight:900;font-size:20px;margin:14px 2px}.meta{color:#52597a;margin:4px 2px}.dl{display:block;width:100%;background:#FFD21F;border:0;border-radius:14px;padding:15px;font-weight:900;font-size:16px;margin-top:14px;cursor:pointer}.nt{font-size:12px;color:#7a84a3;text-align:center;margin-top:10px}@media print{body{background:#fff}.dl,.nt{display:none}.it{break-inside:avoid}}</style></head><body><div class="hh">Байкал <b>Салют</b></div><div class="w"><h1>Заказ № ' + hx(o.id) + '</h1><span class="st">' + hx(NOTE[o.status] || o.status).replace(/^./, m => m.toUpperCase()) + '</span>' + rows + disc + '<div class="tt"><span>Итого</span><span>' + money(o.total) + '</span></div>' + (dd ? '<div class="meta">Доставка: ' + dd + '</div>' : '') + (o.address ? '<div class="meta">Адрес: ' + hx(o.address) + '</div>' : '') + (pay ? '<div class="meta">Оплата: ' + pay + '</div>' : '') + '<button class="dl" onclick="window.print()">⬇ Сохранить в PDF</button><div class="nt">В окне печати выберите «Сохранить как PDF». Вопросы по заказу — напишите нам в Telegram-боте.</div></div></body></html>';
+  res.writeHead(200, H); res.end(html);
+}
 http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end() }
@@ -722,6 +754,7 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
       const orig = res.writeHead.bind(res); res.writeHead = (c, h) => orig(c, { ...CORS, ...h });
       return await api(req, res, url);
     }
+    if (url.pathname.startsWith('/o/') && req.method === 'GET') return orderPage(req, res, url);
     stat(req, res, url);
   } catch (e) { console.error(e); if (!res.headersSent) send(res, 500, { error: 'server' }) }
 }).listen(PORT, () => { console.log('Байкал Салют: сервер заказов на порту ' + PORT); const ownerOf = o => { // чей заказ (id в Telegram): по привязке статусов или по личной карте клиента
@@ -731,4 +764,4 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
   SUBS = require('./subs')({ DATA, alert: alertText, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
   BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), cardDefaults: () => cardCfg, orders: () => orders, persist, statusText, irkToday, substAnswer }); BOT.start() });
 
-if (process.env.BS_TEST) module.exports = { view, orders, BASE, startOos, substAnswer, remindSubst, setBot: b => { BOT = b }, cat };
+if (process.env.BS_TEST) module.exports = { view, orders, BASE, orderLink, startOos, substAnswer, remindSubst, setBot: b => { BOT = b }, cat };

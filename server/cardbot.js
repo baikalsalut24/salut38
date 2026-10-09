@@ -29,11 +29,11 @@ const DISC_TXT = '👉 Промокоды вводятся после добав
 const PAY_TXT = '🚚 По городу Иркутску бесплатная доставка до ваших дверей.\n👋 Дату и время доставки вы выбираете сами\n💰 Вы оплачиваете заказ только после его получения';
 const jpost = (url, body, headers) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }).then(r => r.json().catch(() => ({}))).catch(e => { console.error('bot', e.message); return {} });
 
-async function send(ch, chat, text, photo, kb) {
+async function send(ch, chat, text, photo, kb, html) {
   if (!chat) return;
   if (ch === 'telegram' && TG) {
-    if (photo) { const r = await jpost(TG_API + '/bot' + TG + '/sendPhoto', { chat_id: chat, photo, caption: text, ...(kb ? { reply_markup: kb } : {}) }); if (r.ok) return }
-    return jpost(TG_API + '/bot' + TG + '/sendMessage', { chat_id: chat, text, ...(kb ? { reply_markup: kb } : {}) });
+    if (photo) { const r = await jpost(TG_API + '/bot' + TG + '/sendPhoto', { chat_id: chat, photo, caption: text, ...(html ? { parse_mode: 'HTML' } : {}), ...(kb ? { reply_markup: kb } : {}) }); if (r.ok) return }
+    return jpost(TG_API + '/bot' + TG + '/sendMessage', { chat_id: chat, text, ...(html ? { parse_mode: 'HTML', disable_web_page_preview: true } : {}), ...(kb ? { reply_markup: kb } : {}) });
   }
   if (ch === 'max' && MAXT) return jpost(MAX_API + '/messages?chat_id=' + encodeURIComponent(chat), { text }, { authorization: MAXT });
 }
@@ -112,10 +112,10 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     if (/^s[onfpcydz]:/.test(d) && ctx.substAnswer) { // замена товара: so утвердить, sn следующая, sf/sp список, sc выбор, sy подтвердить, sd/sz удаление
       const [k, oid, cid, arg] = d.split(':'), act = { so: 'ok', sn: 'next', sf: 'self', sp: 'list', sc: 'pick', sy: 'yes', sd: 'del', sz: 'delyes' }[k];
       const res = ctx.substAnswer(act, oid, cid, chat, arg), mid = q.message && q.message.message_id, ed = (m, b) => mid && jpost(TG_API + '/bot' + TG + '/' + m, { chat_id: chat, message_id: mid, ...b });
-      if (res && typeof res === 'object' && res.list && q.message.text !== undefined && !q.message.photo) return ed('editMessageText', { text: res.text, reply_markup: res.kb });
+      if (res && typeof res === 'object' && res.list && q.message.text !== undefined && !q.message.photo) return ed('editMessageText', { text: res.text, ...(res.html ? { parse_mode: 'HTML', disable_web_page_preview: true } : {}), reply_markup: res.kb });
       if (mid) ed('editMessageReplyMarkup', { reply_markup: { inline_keyboard: [] } });
       if (!res) return;
-      return typeof res === 'string' ? send('telegram', chat, res) : send('telegram', chat, res.text, res.photo || '', res.kb);
+      return typeof res === 'string' ? send('telegram', chat, res) : send('telegram', chat, res.text, res.photo || '', res.kb, res.html);
     }
     if (d === 'disc') return sendPhotoFile(chat, DISC_IMG, DISC_TXT, IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP]]));
     if (d === 'pay') return send('telegram', chat, PAY_TXT, '', IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP], [URLB('обратиться в поддержку', SUPPORT)]]));

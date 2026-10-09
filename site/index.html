@@ -801,7 +801,8 @@ function parseHash(){const m=location.hash.match(/^#catalog\/([^/]+)\/(-|\d+)\/(
 function nav(c,s,p,keepSort){cat=c;sub=s;page=p||1;query='';if(!keepSort){sort='asc';setSortUi()}
   renderGrid();lastHash=hashOf();try{history.pushState(null,'',lastHash)}catch(e){}
   if(c===null)document.getElementById('catalog').scrollIntoView();else window.scrollTo(0,0)}
-function onHash(){if(location.hash===lastHash)return;const st=parseHash();lastHash=location.hash;
+function openHashProduct(defer){const m=location.hash.match(/^#p\/([^/]+)$/);if(!m)return false;let k;try{k=decodeURIComponent(m[1])}catch(e){return false}if(!BY.get(k))return false;lastHash=location.hash;if(defer)setTimeout(()=>openProduct(k),0);else openProduct(k);return true}
+function onHash(){if(location.hash===lastHash)return;if(openHashProduct(true))return;const st=parseHash();lastHash=location.hash;
   if(st){cat=st.c;sub=st.s;page=st.p;query='';renderGrid();window.scrollTo(0,0)}
   else{cat=null;sub=null;page=1;query='';renderGrid();const id=location.hash.slice(1),el=id&&document.getElementById(id);requestAnimationFrame(()=>{if(el)el.scrollIntoView()})}}
 function openSub(i){nav(cat,i,1)}
@@ -1167,7 +1168,7 @@ function closeVideo(){VSKU=null;document.getElementById('vmodal').classList.remo
 document.addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){e.preventDefault();e.stopPropagation();openVideo(b.dataset.v);return}
   if(e.target.id==='vmodal'||e.target.id==='vclose')closeVideo()},true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeVideo()});
-setHH();if(parseHash())onHash();
+setHH();if(!openHashProduct()&&parseHash())onHash();
 heroFx();window.addEventListener('resize',heroFx);window.addEventListener('load',heroFx);if(document.fonts)document.fonts.ready.then(heroFx);renderCats();renderGrid();renderCart();
 </script>
 </body>
