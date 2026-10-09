@@ -71,6 +71,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     const card = () => say(cardText(cardFor(ch, u.userId || u.chatId, u.name)), ch === 'telegram' ? CARD_IMG : '');
     if (sm) { // переход по ссылке: параметр после start решает, что показать
       if (key === 'card') return card();
+      if (key === 'discounts' && ch === 'telegram') return sendPhotoFile(u.chatId, DISC_IMG, DISC_TXT, IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP]])); // то же, что кнопка «скидки» в меню: список промокодов 5–30%
       if (key && key.startsWith('promo_')) {
         const slug = key.slice(6).toLowerCase(), p = ctx.promos().find(x => x.kind === 'promo' && x.slug === slug);
         if (p && p.active && !(p.until && p.until < ctx.irkToday())) {
