@@ -239,13 +239,14 @@ const shotsOf = sku => { const g = gpData()[sku], r = g && (g.p || []).find(x =>
 const visibleNow = b => !hiddenNow(b.sku) && !FEED.hd.includes(b.sku);
 const PM_NUM = /выстрел|калибр|высот|длительн|время|эффект|мощност|залп|диаметр/i; // числовые характеристики для сравнения
 const numsOf = sku => { const g = gpData()[sku], o = {}; for (const r of (g && g.p) || []) { if (!PM_NUM.test(r[0])) continue; const v = parseFloat(String(r[1]).replace(',', '.').replace(/[^\d.:]/g, '').replace(/^(\d+):(\d+)$/, (m, x, y) => +x * 60 + +y)); if (v > 0) o[String(r[0]).toLowerCase().trim()] = v } return o };
-function suggestFor(sku, exclude) { // замена: та же категория, близкие характеристики (выстрелы, калибр, высота, время), ближайшая цена; бренд — любой, свой чуть предпочтительнее
+function suggestFor(sku, exclude, byPrice) { // замена: та же категория, близкие характеристики (выстрелы, калибр, высота, время), ближайшая цена; бренд — любой, свой чуть предпочтительнее
   const base = BASE.find(b => b.sku === sku); if (!base) return null;
   const p0 = priceOf(sku, base.price) || 1, n0 = numsOf(sku), c0 = base.cats || []; let best = null, bs = -1e9;
   for (const b of BASE) {
     if (b.sku === sku || exclude.includes(b.sku) || !visibleNow(b)) continue;
     const pr = priceOf(b.sku, b.price); if (!(pr > 0) || pr < p0 * 0.5 || pr > p0 * 1.6) continue;
     const shared = (b.cats || []).filter(c => c0.includes(c)).length; if (!shared) continue; // только своя категория
+    if (byPrice) { const sc2 = -Math.abs(pr - p0) / p0; if (sc2 > bs) { bs = sc2; best = b } continue } // «другая замена»: следующий ближайший по цене в той же категории
     let sc = 20 + shared * 5; if (b.brand && b.brand === base.brand) sc += 6;
     const d = (pr - p0) / p0; sc -= Math.abs(d) * 70 + (d > 0 ? d * 30 : 0);
     const n1 = numsOf(b.sku); let cnt = 0, diff = 0;
@@ -299,7 +300,7 @@ function nextSubst(o, c, by, sku) {
   if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Замена уже обработана' };
   let off = null;
   if (sku) { const b = BASE.find(x => x.sku === sku); if (!b) return { error: 'Товар не найден' }; if (!visibleNow(b)) return { error: 'Этот товар сейчас скрыт или закончился' }; off = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' } }
-  else if (c.tried.length < 4) off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried]);
+  else if (c.tried.length < 4) off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried], true);
   if (!off) { c.st = 'manual'; c.offer = null; histAdd(o, by, 'Подходящих замен для «' + c.name + '» больше нет — нужна связь с клиентом'); o.updatedAt = new Date().toISOString(); persist();
     if (by === 'клиент') { notifyOrder(o, 'Заказ № ' + o.id + ': подходящих замен больше не нашли. Оператор свяжется с вами по телефону ' + o.phone + '.'); alertText('⚠️ Заказ № ' + o.id + ': клиент отказался от замены «' + c.name + '», вариантов больше нет. Позвоните: ' + o.phone) } return { ok: true } }
   c.offer = off; c.st = 'wait'; c.tried.push(off.sku); histAdd(o, by, 'Другая замена для «' + c.name + '»: ' + off.name); o.updatedAt = new Date().toISOString();
