@@ -577,7 +577,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
         <div class="cp-r">на фейерверки<br>в вашем заказе</div>
       </div>
       <p class="disc-p">Нажмите кнопку «Получить скидку в Telegram» прямо сейчас и получите купоны на скидку до 30 процентов!</p>
-      <a class="disc-go" href="https://online-qr.ru/nazhalskidkuvopisanii/" target="_blank" rel="noopener"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.2L2.9 10.4c-1 .4-1 1.1-.2 1.3l4.7 1.5 1.8 5.6c.2.6.4.8.8.8.4 0 .6-.2.9-.4l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3-14.3c.3-1.2-.4-1.8-1.1-1.2zM8.4 12.9l9.6-6c.5-.3.9-.1.5.2l-7.9 7.1-.3 3.3z" fill="#111"/></svg>Получить скидку в Telegram</a>
+      <a class="disc-go" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.2L2.9 10.4c-1 .4-1 1.1-.2 1.3l4.7 1.5 1.8 5.6c.2.6.4.8.8.8.4 0 .6-.2.9-.4l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3-14.3c.3-1.2-.4-1.8-1.1-1.2zM8.4 12.9l9.6-6c.5-.3.9-.1.5.2l-7.9 7.1-.3 3.3z" fill="#111"/></svg>Получить скидку в Telegram</a>
     </div>
   </div>
 </section>
@@ -604,7 +604,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </footer>
 
-<div class="vmodal" id="vmodal" role="dialog" aria-modal="true" aria-label="Видео товара"><div class="vbox"><header><b id="vtitle2"></b><button type="button" id="vclose" aria-label="Закрыть">×</button></header><div class="vframe" id="vframe"></div><div class="vfoot"><div class="vsave" id="vsave"></div><div class="vbuy" id="vbuy"></div><a class="vcard" href="https://online-qr.ru/nazhalskidkuvopisanii/" target="_blank" rel="noopener">Получить карту</a></div></div></div>
+<div class="vmodal" id="vmodal" role="dialog" aria-modal="true" aria-label="Видео товара"><div class="vbox"><header><b id="vtitle2"></b><button type="button" id="vclose" aria-label="Закрыть">×</button></header><div class="vframe" id="vframe"></div><div class="vfoot"><div class="vsave" id="vsave"></div><div class="vbuy" id="vbuy"></div><a class="vcard" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту</a></div></div></div>
 <div class="veil" id="veil"></div>
 <aside class="drawer" id="drawer" aria-label="Корзина" aria-hidden="true">
   <div class="d-head"><h2 class="ph y">Корзина</h2><button class="icon-btn" id="closeCart" aria-label="Закрыть"><svg width="22" height="22" viewBox="0 0 24 24" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
@@ -832,7 +832,7 @@ function ppHtml(p){const k=esc(p.sku),n=cart[p.sku]||0,base=(typeof total==='fun
   return `<div class="pp-h"><button type="button" data-pp-x="1">← Назад</button><b>${esc(p.name)}</b></div>
   <div class="pp-w"><div class="pp-img">${p.hit?'<span class="hit">Хит</span>':''}${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотреть видео"><i></i>Видео</button>`:''}</div>
    <div><div class="pp-br">${esc(p.brand)}</div><h1>${esc(p.name)}</h1><div class="pp-sp">${specHtml(p,1)}</div></div><div class="pp-pr">${ruble(p.price)}</div>
-   <div class="pp-sv"><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://online-qr.ru/nazhalskidkuvopisanii/" target="_blank" rel="noopener">Получить карту</a></div>
+   <div class="pp-sv"><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту</a></div>
    <div class="pp-t">${rows.map(r=>`<div><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>
    ${sim.length?`<h2>Просмотренные товары</h2><div class="rail">${sim.map(card).join('')}</div>`:''}</div>
   <div class="pp-bar"><div class="pb-p">${ruble(p.price)}</div><div class="pb-a">${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div>`:`<button class="add" data-p="${k}">В корзину</button>`}<button type="button" id="ppcart">Корзина${count()?' · '+count():''}</button></div></div>`}
@@ -951,7 +951,7 @@ function renderCart(){
     return `<div class="line"><div class="t${(p.v||p.vid)?' hasv':''}"${(p.v||p.vid)?` data-v="${esc(p.sku)}"`:''}>${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${esc(p.sku)}"><i></i>Видео</button>`:''}</div>
       <div class="li"><b>${p.name}</b><small>${ruble(p.price)}</small>
         <div class="q"><button data-m="${k}" aria-label="Меньше">−</button><b>${cart[k]}</b><button data-p="${k}" aria-label="Больше">+</button></div>
-        <b class="lt">${ruble(p.price*cart[k])}</b></div></div>`}).join('')+`<div class="cardsave"${PROMO_OK?' style="display:none"':''}><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://online-qr.ru/nazhalskidkuvopisanii/" target="_blank" rel="noopener">Получить карту</a></div>`;
+        <b class="lt">${ruble(p.price*cart[k])}</b></div></div>`}).join('')+`<div class="cardsave"${PROMO_OK?' style="display:none"':''}><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту</a></div>`;
   $('cartBody').innerHTML=secHtml('items','Товары','',lines,OPEN.items);
   const promoBody=`<div class="promo"><div class="promo-row"><input class="f" id="fpromo" placeholder="Промокод или номер дисконтной карты" autocomplete="off" autocapitalize="characters" value="${esc(PROMO)}"><button type="button" id="promoApply" class="${PROMO_OK?'ok':''}">${PROMO_OK?'Принят ✓':'Применить'}</button></div>${PROMO_MSG?'<div class="promo-err">'+esc(PROMO_MSG)+'</div>':''}</div>`;
   $('cartFoot').innerHTML=secHtml('promo','Промокод','',promoBody,OPEN.promo)+secHtml('totals','Итого','',`${info?`<div class="sum"><span>Итого</span><span>${ruble(tt)}</span></div><div class="sum dsum" style="color:#1F9D55"><span>Скидка по промокоду</span><span>−${ruble(dsc)} (${dpc}%)</span></div><div class="sum"><span>К оплате</span><span>${ruble(pay)}</span></div>`:`<div class="sum"><span>Итого</span><span>${ruble(tt)}</span></div>`}`,OPEN.totals)+
@@ -1123,7 +1123,7 @@ function render(){
 var TIERS=[[5000,5],[20000,10],[50000,15],[100000,20],[500000,25]];
 function discHtml(sum,pc,sv){var all=sum+(typeof total==='function'?total():0),nx=null;for(var i=0;i<TIERS.length;i++){if(all<TIERS[i][0]){nx=TIERS[i];break}}if(!nx&&all<500000)nx=[500000,30];
   var nxt=nx?'Добавьте товаров ещё на <b>'+ruble(nx[0]-all)+'</b> — скидка вырастет до <b>'+tierPc(nx[0])+'%</b>.':'У вас максимальная скидка — <b>30%</b>.';
-  return '<div class="kit-dsc"><div class="d1">💸 Цены со скидкой действуют с <b>виртуальной дисконтной картой</b>. Скидка от 5% до 30% зависит от суммы заказа.</div><div class="d2">'+nxt+'</div><a href="https://online-qr.ru/nazhalskidkuvopisanii/" target="_blank" rel="noopener">Получить карту в Telegram</a><div class="d3">Откроется Telegram, и бот пришлёт вам виртуальную дисконтную карту.</div></div>'}
+  return '<div class="kit-dsc"><div class="d1">💸 Цены со скидкой действуют с <b>виртуальной дисконтной картой</b>. Скидка от 5% до 30% зависит от суммы заказа.</div><div class="d2">'+nxt+'</div><a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту в Telegram</a><div class="d3">Откроется Telegram, и бот пришлёт вам виртуальную дисконтную карту.</div></div>'}
 function shown(){return !$k('kitRes').hidden}
 function reveal(id){var e=$k(id);if(!e||!e.hidden)return;e.hidden=false;setTimeout(function(){var r=e.getBoundingClientRect();if(r.bottom>window.innerHeight-20||r.top<60)e.scrollIntoView({behavior:'smooth',block:'center'})},60)}
 function resetKit(){['kS1','kS2','kS3','kS4'].forEach(function(i){$k(i).hidden=true});$k('kitStart').hidden=false;[].forEach.call(document.querySelectorAll('#kitOcc button,#kitShow button'),function(b){b.classList.remove('on')});$k('kitKids').checked=false;K.kids=false;K.occ='ny';K.show='long';$k('kitRange').value=380;upd()}
