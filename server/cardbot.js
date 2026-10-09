@@ -10,11 +10,11 @@ const SITE = (E.SITE_URL || '').replace(/\/$/, ''), CARD_IMG = E.CARD_IMG || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const jpost = (url, body, headers) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }).then(r => r.json().catch(() => ({}))).catch(e => { console.error('bot', e.message); return {} });
 
-async function send(ch, chat, text, photo) {
+async function send(ch, chat, text, photo, kb) {
   if (!chat) return;
   if (ch === 'telegram' && TG) {
-    if (photo) { const r = await jpost(TG_API + '/bot' + TG + '/sendPhoto', { chat_id: chat, photo, caption: text }); if (r.ok) return }
-    return jpost(TG_API + '/bot' + TG + '/sendMessage', { chat_id: chat, text });
+    if (photo) { const r = await jpost(TG_API + '/bot' + TG + '/sendPhoto', { chat_id: chat, photo, caption: text, ...(kb ? { reply_markup: kb } : {}) }); if (r.ok) return }
+    return jpost(TG_API + '/bot' + TG + '/sendMessage', { chat_id: chat, text, ...(kb ? { reply_markup: kb } : {}) });
   }
   if (ch === 'max' && MAXT) return jpost(MAX_API + '/messages?chat_id=' + encodeURIComponent(chat), { text }, { authorization: MAXT });
 }
@@ -27,13 +27,45 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     if (!c) { const k = newCode(); c = { code: k.code, aliases: [k.alias], kind: 'card', type: 'tiers', value: null, until: '', note: 'Бот ' + ch + (name ? ': ' + String(name).slice(0, 40) : ''), active: true, createdAt: new Date().toISOString(), by: 'бот', owner: { ch, id: String(id) } }; promos.push(c); ctx.savePromos() }
     return c;
   }
-  const cardText = c => 'Ваша дисконтная карта «Байкал Салют»\n№ ' + c.code + '\n\nСкидка от 5% до 30% — чем больше заказ, тем больше скидка. Введите номер карты в корзине, в поле «Промокод или номер дисконтной карты».' + (SITE ? '\n\nСайт: ' + SITE : '') + '\n\nКарта личная, хранится у нас: если потеряете, напишите боту /start — пришлём снова.';
+  const cardText = c => 'Ваша дисконтная карта «Байкал Салют»\n№ ' + c.code + '\n\nСкидка от 5% до 30% — чем больше заказ, тем больше скидка. Введите номер карты в корзине, в поле «Промокод или номер дисконтной карты».' + (SITE ? '\n\nСайт: ' + SITE : '') + '\n\nКарта личная, хранится у нас: если потеряете, напишите боту /card — пришлём снова.';
+  const KB = { keyboard: [[{ text: '💳 Моя карта' }, { text: '📦 Мой заказ' }]], resize_keyboard: true };
+  const dLabel = p => p.type === 'percent' ? 'Скидка ' + p.value + '%' : p.type === 'amount' ? 'Скидка ' + p.value + ' ₽' : 'Скидка от 5% до 30% (зависит от суммы заказа)';
+  const fmtD = d => String(d).split('-').reverse().join('.');
+  const promoText = p => 'Ваш промокод: ' + p.code + '\n' + dLabel(p) + (p.until ? '\nДействует до ' + fmtD(p.until) : '') + '\n\nВведите его в корзине на сайте, в поле «Промокод или номер дисконтной карты».' + (SITE ? '\n\nСайт: ' + SITE : '');
+  const welcome = 'Здравствуйте! Это бот магазина «Байкал Салют».\n\n💳 Моя карта — личная дисконтная карта\n📦 Мой заказ — статус заказа (напишите номер заказа и последние 4 цифры телефона, например: 1234 5678)\n\nПромокоды выдаются по ссылкам из акций и рекламы.' + (SITE ? '\n\nСайт: ' + SITE : '');
+  const fails = new Map(); // защита от подбора заказов: не больше 5 неудач в час с одного чата
+  const failOk = id => { const f = (fails.get(id) || []).filter(t => Date.now() - t < 36e5); fails.set(id, f); if (fails.size > 5000) fails.clear(); return f.length < 5 };
+  const failAdd = id => { const f = fails.get(id) || []; f.push(Date.now()); fails.set(id, f) };
   async function handle(ch, u) { // u: { chatId, userId, name, text }
     const t = Date.now(); if (t - (last.get(u.chatId) || 0) < 1500) return; last.set(u.chatId, t); if (last.size > 5000) last.clear();
-    const key = (String(u.text || '').match(/^\/start\s+(\S+)/) || [])[1];
-    const o = key && Object.values(ctx.orders()).find(x => x.notify && x.notify.token === key && x.notify.channel === ch);
-    if (o) { o.notify.chatId = String(u.chatId); o.notify.linked = true; ctx.persist(); await send(ch, u.chatId, 'Готово! Будем сообщать о статусе заказа здесь.\n' + ctx.statusText(o)) }
-    await send(ch, u.chatId, cardText(cardFor(ch, u.userId || u.chatId, u.name)), ch === 'telegram' ? CARD_IMG : '');
+    const text = String(u.text || '').trim(), sm = text.match(/^\/start(?:\s+(\S+))?/), key = sm && sm[1];
+    const kb = ch === 'telegram' ? KB : undefined, say = (x, photo) => send(ch, u.chatId, x, photo, kb);
+    const card = () => say(cardText(cardFor(ch, u.userId || u.chatId, u.name)), ch === 'telegram' ? CARD_IMG : '');
+    if (sm) { // переход по ссылке: параметр после start решает, что показать
+      if (key === 'card') return card();
+      if (key && key.startsWith('promo_')) {
+        const slug = key.slice(6).toLowerCase(), p = ctx.promos().find(x => x.kind === 'promo' && x.slug === slug);
+        if (p && p.active && !(p.until && p.until < ctx.irkToday())) return say(promoText(p));
+        return say('К сожалению, этот промокод уже не действует.' + (SITE ? '\nАктуальные предложения: ' + SITE : ''));
+      }
+      const o = key && Object.values(ctx.orders()).find(x => x.notify && x.notify.token === key && x.notify.channel === ch);
+      if (o) { o.notify.chatId = String(u.chatId); o.notify.linked = true; ctx.persist(); return say('Готово! Будем сообщать о статусе заказа здесь.\n' + ctx.statusText(o)) }
+      return say(welcome); // просто /start — человек нашёл бота сам или ему его переслали
+    }
+    if (/^\/card\b/i.test(text) || /моя карта/i.test(text)) return card();
+    if (/^\/order\b/i.test(text) || /мой заказ/i.test(text)) {
+      const mine = Object.values(ctx.orders()).filter(x => x.notify && x.notify.chatId === String(u.chatId) && x.notify.channel === ch).slice(-3);
+      if (mine.length) return say(mine.map(ctx.statusText).join('\n'));
+      return say('Напишите номер заказа и последние 4 цифры телефона, например: 1234 5678');
+    }
+    const m = text.match(/^№?\s*(\S+)\s+(\d{4})$/);
+    if (m) {
+      if (!failOk(u.chatId)) return say('Слишком много попыток. Попробуйте позже или позвоните нам.');
+      const o = ctx.orders()[m[1]];
+      if (o && String(o.phone || '').replace(/\D/g, '').endsWith(m[2])) return say(ctx.statusText(o));
+      failAdd(u.chatId); return say('Заказ не найден. Проверьте номер заказа и последние 4 цифры телефона.');
+    }
+    return say(welcome);
   }
   async function tgPoll() {
     let off = 0;

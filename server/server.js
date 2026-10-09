@@ -128,6 +128,7 @@ const SEES = { admin: null };
 const normCode = s => String(s == null ? '' : s).replace(/[\u0000-\u001f\s]/g, '').toUpperCase().slice(0, 30);
 const TIER = t => t < 5000 ? 5 : t < 20000 ? 10 : t < 50000 ? 15 : t < 100000 ? 20 : t < 500000 ? 25 : 30; // система скидок по сумме заказа
 const promoDiscount = (p, total) => p.type === 'percent' ? Math.round(total * p.value / 100) : p.type === 'amount' ? Math.min(Math.round(p.value), total) : Math.round(total * TIER(total) / 100);
+const cleanSlug = v => { const t = String(v == null ? '' : v).trim().toLowerCase(); return t === '' ? '' : /^[a-z0-9_-]{2,40}$/.test(t) ? t : null }; // метка для ссылки на бота: t.me/бот?start=promo_МЕТКА
 const irkToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const promoState = p => !p.active ? 'paused' : (p.until && p.until < irkToday() ? 'expired' : 'ok');
 const findPromo = code => { const c = normCode(code); return c ? promos.find(p => p.code === c || (p.aliases || []).includes(c)) : null };
@@ -437,6 +438,7 @@ async function api(req, res, url) {
     return send(res, 200, { counts, days, delivered: done.length, deliveredSum: done.reduce((s, o) => s + o.total, 0), openSum: all.filter(o => !['delivered', 'cancelled'].includes(o.status)).reduce((s, o) => s + o.total, 0) });
   }
 
+  if (p === '/api/botinfo') { if (!isM) return send(res, 403, { error: 'Только менеджер' }); return send(res, 200, { tg: TG_BOT, max: MAX_BOT }) }
   if (p === '/api/promos') {
     if (!isM) return send(res, 403, { error: 'Только менеджер' });
     if (m === 'GET') return send(res, 200, promos.map(promoPub).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
@@ -454,13 +456,15 @@ async function api(req, res, url) {
       if (!/^[A-Z0-9\u0410-\u042f\u0401_-]{3,30}$/.test(code)) return send(res, 400, { error: 'Код: 3–30 символов, буквы, цифры, «-» или «_»' });
       if (promos.some(x => x.code === code || (x.aliases || []).includes(code))) return send(res, 400, { error: 'Такой код уже есть' });
       const c = check(b); if (c.error) return send(res, 400, c);
-      const pr = { code, kind: b.kind === 'card' ? 'card' : 'promo', type: c.type, value: c.value, until: c.until, note: clean(b.note, 200), active: true, createdAt: new Date().toISOString(), by: me.name };
+      const slug = cleanSlug(b.slug); if (slug === null) return send(res, 400, { error: 'Метка для бота: латиница, цифры, «_» или «-», 2–40 символов' }); if (slug && promos.some(x => x.slug === slug)) return send(res, 400, { error: 'Такая метка уже есть' });
+      const pr = { code, kind: b.kind === 'card' ? 'card' : 'promo', type: c.type, value: c.value, until: c.until, note: clean(b.note, 200), active: true, createdAt: new Date().toISOString(), by: me.name, ...(slug ? { slug } : {}) };
       promos.push(pr); save(F.promos, promos); return send(res, 200, promoPub(pr));
     }
     const pr = promos.find(x => x.code === normCode(b.code)); if (!pr) return send(res, 404, { error: 'Код не найден' });
     if (m === 'PATCH') {
       if ('active' in b) pr.active = !!b.active;
       if ('note' in b) pr.note = clean(b.note, 200);
+      if ('slug' in b) { const sl = cleanSlug(b.slug); if (sl === null) return send(res, 400, { error: 'Метка для бота: латиница, цифры, «_» или «-», 2–40 символов' }); if (sl && promos.some(x => x !== pr && x.slug === sl)) return send(res, 400, { error: 'Такая метка уже есть' }); if (sl) pr.slug = sl; else delete pr.slug }
       if ('type' in b || 'value' in b || 'until' in b) { const c = check(b, pr); if (c.error) return send(res, 400, c); pr.type = c.type; pr.value = c.value; pr.until = c.until }
       save(F.promos, promos); return send(res, 200, promoPub(pr));
     }

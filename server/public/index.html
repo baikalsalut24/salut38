@@ -332,17 +332,19 @@ function promoLine(o){const i=o.promoInfo;let pl='';
     else if(i.state==='expired')pl=' <span class="pill warn">срок действия истёк</span>';
     else pl=' <span class="pill warn">нет в списке, проверьте вручную</span>'}
   return `<div style="margin-top:6px"><b>Промокод/карта:</b> ${esc(o.promo)}${pl}</div>`}
-let promos=null;
-async function loadPromos(){try{promos=await api('/api/promos');if(tab==='promos')drawPromos();load()}catch(e){toast(e.error,true)}}
+let promos=null,botInfo=null;
+async function loadPromos(){try{promos=await api('/api/promos');if(!botInfo)try{botInfo=await api('/api/botinfo')}catch{}if(tab==='promos')drawPromos();load()}catch(e){toast(e.error,true)}}
 function fmtDate(d){return d?new Date(d+'T00:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}):''}
+const blink=k=>botInfo&&botInfo.tg?'https://t.me/'+botInfo.tg+'?start='+k:'';
+function botBox(){const l=blink('card');return l?`<div class="pc"><div class="r1"><span class="cd">Ссылка на бота</span></div><div class="mt">Дисконтная карта: ${esc(l)}</div><div class="mt">Статусы заказов клиентам привязываются автоматически. Просто ссылку без параметра (t.me/${esc(botInfo.tg)}) не раздавайте: по ней бот только здоровается.</div><div class="bt"><button data-cp="${esc(l)}">Копировать ссылку на карту</button></div></div>`:''}
 function promoList(){
   if(!promos)return'<div class="empty">Загрузка…</div>';
   if(!promos.length)return'<div class="empty">Промокодов пока нет. Нажмите «+», чтобы добавить первый.</div>';
   const SL={ok:['Действует','ok'],paused:['Пауза','warn'],expired:['Истёк','warn']};
-  return promos.map(p=>`<div class="pc ${p.state==='ok'?'':'paused'}"><div class="r1"><span class="cd">${esc(p.code)}</span><span class="pill ${p.kind==='card'?'card':''}">${PK[p.kind]}</span><span class="pill ${SL[p.state][1]}">${SL[p.state][0]}</span></div>
+  return botBox()+promos.map(p=>`<div class="pc ${p.state==='ok'?'':'paused'}"><div class="r1"><span class="cd">${esc(p.code)}</span><span class="pill ${p.kind==='card'?'card':''}">${PK[p.kind]}</span><span class="pill ${SL[p.state][1]}">${SL[p.state][0]}</span></div>
     <div class="ds">${esc(dlabel(p))}</div>
-    <div class="mt">Использован: ${p.uses} · на сумму ${rub(p.sum)}${p.disc?' · скидок на '+rub(p.disc):''}${p.until?' · до '+esc(fmtDate(p.until)):''}</div>${p.note?`<div class="mt">«${esc(p.note)}»</div>`:''}
-    <div class="bt"><button data-cp="${esc(p.code)}">Копировать</button><button data-tg="${esc(p.code)}">${p.active?'Поставить на паузу':'Включить'}</button><button class="d" data-rm="${esc(p.code)}">Удалить</button></div></div>`).join('')}
+    <div class="mt">Использован: ${p.uses} · на сумму ${rub(p.sum)}${p.disc?' · скидок на '+rub(p.disc):''}${p.until?' · до '+esc(fmtDate(p.until)):''}</div>${p.note?`<div class="mt">«${esc(p.note)}»</div>`:''}${p.slug?`<div class="mt">Метка бота: promo_${esc(p.slug)}</div>`:''}
+    <div class="bt"><button data-cp="${esc(p.code)}">Копировать</button>${p.slug&&blink('promo_'+p.slug)?`<button data-cp="${esc(blink('promo_'+p.slug))}">Ссылка для бота</button>`:''}<button data-tg="${esc(p.code)}">${p.active?'Поставить на паузу':'Включить'}</button><button class="d" data-rm="${esc(p.code)}">Удалить</button></div></div>`).join('')}
 function promoForm(){
   closeSheet();const bg=document.createElement('div');bg.className='sheet-bg';document.body.appendChild(bg);
   bg.innerHTML=`<div class="sheet"><div class="sh"><h3>Новый промокод</h3><button class="x" id="pc_x">×</button></div><div class="sb"><div class="pf" style="margin-top:0">
@@ -352,7 +354,8 @@ function promoForm(){
       <label for="pc_t">Скидка</label><select class="sel" id="pc_t"><option value="percent">В процентах</option><option value="amount">В рублях</option><option value="tiers">По системе скидок (5–30% по сумме заказа)</option></select>
       <input class="f" id="pc_v" inputmode="numeric" placeholder="Сколько процентов, от 1 до 90">
       <label for="pc_u">Действует до (необязательно)</label><input class="f" id="pc_u" type="date">
-      <input class="f" id="pc_n" placeholder="Заметка: кому выдан, для чего (необязательно)"></div></div>
+      <input class="f" id="pc_n" placeholder="Заметка: кому выдан, для чего (необязательно)">
+      <input class="f" id="pc_s" placeholder="Метка для ссылки в боте, латиницей (необязательно), напр. ny10" autocapitalize="none" autocomplete="off"></div></div>
     <div class="acts"><button class="btn" id="pc_a">Добавить</button></div></div>`;
   const sync=()=>{const t=$('#pc_t').value;$('#pc_v').hidden=t==='tiers';$('#pc_v').placeholder=t==='percent'?'Сколько процентов, от 1 до 90':'Сколько рублей скидки'};
   $('#pc_t').onchange=sync;sync();
@@ -360,7 +363,7 @@ function promoForm(){
     if(e.target===bg||id==='pc_x')return closeSheet();
     try{
       if(id==='pc_g'){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let c='';for(let i=0;i<6;i++)c+=A[Math.floor(Math.random()*A.length)];$('#pc_c').value=c}
-      else if(id==='pc_a'){await api('/api/promos',{method:'POST',body:{code:$('#pc_c').value,kind:$('#pc_k').value,type:$('#pc_t').value,value:$('#pc_v').value,until:$('#pc_u').value,note:$('#pc_n').value}});
+      else if(id==='pc_a'){await api('/api/promos',{method:'POST',body:{code:$('#pc_c').value,kind:$('#pc_k').value,type:$('#pc_t').value,value:$('#pc_v').value,until:$('#pc_u').value,note:$('#pc_n').value,slug:$('#pc_s').value}});
         closeSheet();toast('Добавлено',false,true);await loadPromos()}
     }catch(er){toast(er.error,true)}}}
 function drawPromos(){const mn=$('#mn');
