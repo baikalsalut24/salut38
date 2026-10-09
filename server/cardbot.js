@@ -54,8 +54,13 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
   const failOk = id => { const f = (fails.get(id) || []).filter(t => Date.now() - t < 36e5); fails.set(id, f); if (fails.size > 5000) fails.clear(); return f.length < 5 };
   const failAdd = id => { const f = fails.get(id) || []; f.push(Date.now()); fails.set(id, f) };
   async function handle(ch, u) { // u: { chatId, userId, name, text }
-    const t = Date.now(); if (t - (last.get(u.chatId) || 0) < 1500) return; last.set(u.chatId, t); if (last.size > 5000) last.clear();
-    const text = String(u.text || '').trim(), sm = text.match(/^\/start(?:\s+(\S+))?/), key = sm && sm[1];
+    const text0 = String(u.text || '').trim(), t = Date.now();
+    if (t - (last.get(u.chatId) || 0) < 1500) { // быстрые подряд сообщения: команды игнорируем, а живой текст не теряем — он уходит в «Сообщения»
+      if (u.ch !== 'max' && ch === 'telegram' && ctx.subs && text0 && !text0.startsWith('/')) ctx.subs.inMsg(u.userId || u.chatId, u.name, text0, TG);
+      return;
+    }
+    last.set(u.chatId, t); if (last.size > 5000) last.clear();
+    const text = text0, sm = text.match(/^\/start(?:\s+(\S+))?/), key = sm && sm[1];
     const sid = u.userId || u.chatId;
     if (ch === 'telegram' && /^\/stop\b/i.test(text)) { ctx.subs && ctx.subs.setSt(sid, 'unsub', TG); return send(ch, u.chatId, 'Вы отписались от рассылок. Заказы и статусы это не затрагивает. Чтобы вернуться, нажмите /start.') }
     if (ch === 'telegram' && ctx.subs) ctx.subs.touch(sid, { start: !!sm, name: u.name, tag: key === 'card' ? 'бот:карта' : key && key.startsWith('promo_') ? 'бот:' + key : '' }, TG);
@@ -86,6 +91,10 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
       if (o && String(o.phone || '').replace(/\D/g, '').endsWith(m[2])) return say(ctx.statusText(o));
       failAdd(u.chatId); return say('Заказ не найден. Проверьте номер заказа и последние 4 цифры телефона.');
     }
+    if (ch === 'telegram' && ctx.subs && text) { // обычное сообщение человека — не команда меню: передаём сотрудникам
+      const ack = ctx.subs.inMsg(sid, u.name, text, TG);
+      return ack ? say('Спасибо, сообщение получено! Ответим здесь в ближайшее время.') : undefined;
+    }
     return home();
   }
   async function onCallback(q) { // нажатия кнопок меню
@@ -106,7 +115,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
           off = u.update_id + 1;
           if (u.callback_query) { await onCallback(u.callback_query); continue }
           if (u.my_chat_member && u.my_chat_member.chat && u.my_chat_member.chat.type === 'private' && ctx.subs) { const s = u.my_chat_member.new_chat_member && u.my_chat_member.new_chat_member.status; if (s === 'kicked' || s === 'left') ctx.subs.setSt(u.my_chat_member.chat.id, 'blocked', TG); continue }
-          const m = u.message; if (!m || m.chat.type !== 'private') continue; await handle('telegram', { chatId: m.chat.id, userId: m.from && m.from.id, name: m.from && m.from.first_name, text: m.text || '' }) }
+          const m = u.message; if (!m || m.chat.type !== 'private') continue; await handle('telegram', { chatId: m.chat.id, userId: m.from && m.from.id, name: m.from && m.from.first_name, text: m.text || m.caption || (m.photo ? '[фото]' : m.voice ? '[голосовое сообщение]' : m.video || m.video_note ? '[видео]' : m.document ? '[файл]' : m.sticker ? '[стикер]' : m.location ? '[геопозиция]' : m.contact ? '[контакт]' : '') }) }
       } catch (e) { await sleep(5000) }
     }
   }

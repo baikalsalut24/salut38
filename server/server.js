@@ -200,6 +200,15 @@ function alertOrder(o) {
     req.catch(e => console.error('alert', e.message));
   }
 }
+function alertText(text) { // произвольное уведомление сотрудникам (служебный бот)
+  if (!ALERT_TOKEN || !ALERT_CHAT) return;
+  for (const chat of ALERT_CHAT.split(',').map(x => x.trim()).filter(Boolean)) {
+    const req = ALERT_CH === 'max'
+      ? fetch(MAX_API_A + '/messages?chat_id=' + encodeURIComponent(chat), { method: 'POST', headers: { 'content-type': 'application/json', authorization: ALERT_TOKEN }, body: JSON.stringify({ text }) })
+      : fetch(TG_API + '/bot' + ALERT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) });
+    req.catch(e => console.error('alert', e.message));
+  }
+}
 function notifyOrder(o, text) { const n = o.notify; if (!n || !n.chatId || !BOT) return; if (n.channel === 'telegram' || n.channel === 'max') BOT.send(n.channel, n.chatId, text) }
 const statusText = o => 'Заказ № ' + o.id + ': ' + (NOTE[o.status] || o.status) + (o.status === 'shipping' && o.deliveryInterval ? '. Доставка: ' + o.deliveryInterval : '').replace(/([^.!])$/, '$1.');
 const priceOf = (sku, p) => { const o = cat[sku]; return o && o.p > 0 ? o.p : p }; // цена, выставленная менеджером, главнее цены с сайта
@@ -528,5 +537,5 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
     if (o.notify && o.notify.channel === 'telegram' && o.notify.chatId) return String(o.notify.chatId);
     const pr = o.promo ? findPromo(o.promo) : null; return pr && pr.owner && pr.owner.ch === 'telegram' ? String(pr.owner.id) : '';
   };
-  SUBS = require('./subs')({ DATA, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
+  SUBS = require('./subs')({ DATA, alert: alertText, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
   BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), orders: () => orders, persist, statusText, irkToday }); BOT.start() });

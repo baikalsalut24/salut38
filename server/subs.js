@@ -136,6 +136,23 @@ module.exports = function init(ctx) { // ctx: DATA, orders(), ownerOf(order), te
     return job;
   }
 
+  // ---------- входящие сообщения подписчиков (чаты) ----------
+  const FI = path.join(ctx.DATA, 'inbox.json'); let inbox = {}; try { inbox = JSON.parse(fs.readFileSync(FI, 'utf8')) } catch {}
+  const saveInbox = () => { try { save(FI, inbox) } catch (e) { console.error('inbox', e.message) } };
+  function inAdd(id, name, text, dir, by) {
+    id = String(id); const c = inbox[id] || (inbox[id] = { id, name: '', unread: 0, last: 0, ack: 0, msgs: [] });
+    if (name) c.name = String(name).slice(0, 60); else if (!c.name && subs[id] && subs[id].name) c.name = subs[id].name;
+    c.msgs.push({ d: dir, t: String(text).slice(0, 3500), at: Date.now(), by: by || '' }); if (c.msgs.length > 200) c.msgs = c.msgs.slice(-200);
+    c.last = Date.now(); if (dir === 'in') c.unread++; else c.unread = 0; saveInbox(); return c;
+  }
+  function inMsg(id, name, text, botToken) { // человек написал боту обычный текст — кладём в «Сообщения» и сообщаем сотрудникам; возвращает true, если нужно ответить автоответом
+    if (!sameBot(botToken)) return false;
+    const c = inAdd(id, name, text, 'in'); const first = !c.ack || Date.now() - c.ack > 6 * 3600e3; if (first) { c.ack = Date.now(); saveInbox() }
+    try { ctx.alert && ctx.alert('💬 Сообщение от ' + (c.name || 'подписчика') + ':\n' + String(text).slice(0, 500) + '\n\nОтветить: приложение → Сообщения') } catch {}
+    return first;
+  }
+  const unreadAll = () => Object.values(inbox).reduce((a, c) => a + (c.unread || 0), 0);
+
   // ---------- рассылки ----------
   const footer = '';
   async function sendTo(id, bc) {
@@ -188,6 +205,18 @@ module.exports = function init(ctx) { // ctx: DATA, orders(), ownerOf(order), te
   async function route(req, res, url, me, send) {
     const p = url.pathname, m = req.method, J = async max => { try { return JSON.parse((await readRaw(req, max || 200e3)).toString('utf8') || '{}') } catch { return null } };
     if (p === '/api/subs' && m === 'GET') { await botInfo(); const f = Object.fromEntries(url.searchParams); if (f.tags) f.tags = String(f.tags).split('|').filter(Boolean); return send(res, 200, list(f)) }
+    if (p === '/api/subs/chats' && m === 'GET') {
+      if (url.searchParams.get('count')) return send(res, 200, { unread: unreadAll() });
+      const list = Object.values(inbox).sort((a, b) => b.last - a.last).slice(0, 300).map(c => { const l = c.msgs[c.msgs.length - 1] || {}; return { id: c.id, name: c.name, unread: c.unread || 0, last: c.last, prev: (l.d === 'out' ? 'Вы: ' : '') + String(l.t || '').slice(0, 80), st: subs[c.id] ? subs[c.id].st : '' } });
+      return send(res, 200, { unread: unreadAll(), list });
+    }
+    if (p === '/api/subs/chat' && m === 'GET') { const c = inbox[String(url.searchParams.get('id') || '')]; if (!c) return send(res, 404, { error: 'Диалог не найден' }); if (c.unread) { c.unread = 0; saveInbox() } return send(res, 200, { id: c.id, name: c.name, st: subs[c.id] ? subs[c.id].st : '', msgs: c.msgs }) }
+    if (p === '/api/subs/reply' && m === 'POST') {
+      const b = await J(); const text = String(b && b.text || '').trim(), id = String(b && b.id || ''); if (!id || !text) return send(res, 400, { error: 'Введите текст ответа' }); if (text.length > 3500) return send(res, 400, { error: 'Текст слишком длинный' });
+      const r = await sendTo(id, { text, nofooter: true });
+      if (!r.ok) { if (r.error_code === 403) setSt(id, 'blocked', TOKEN); return send(res, 400, { error: r.error_code === 403 ? 'Человек заблокировал бота — ответить нельзя' : 'Не отправилось: ' + (r.description || 'ошибка Telegram') }) }
+      inAdd(id, '', text, 'out', me.name); return send(res, 200, { ok: true });
+    }
     if (p === '/api/subs/import' && m === 'POST') { const b = await J(8e6); if (!b || !b.csv) return send(res, 400, { error: 'Нет файла' }); const r = importCsv(b.csv); return send(res, r.error ? 400 : 200, r) }
     if (p === '/api/subs/check' && m === 'POST') { const b = await J() || {}; return send(res, 200, await check(!!b.force)) }
     if (p === '/api/subs/check' && m === 'GET') return send(res, 200, job);
@@ -205,5 +234,5 @@ module.exports = function init(ctx) { // ctx: DATA, orders(), ownerOf(order), te
     }
     return send(res, 404, { error: 'нет такого метода' });
   }
-  return { touch, setSt, route, importCsv, list, start() { setInterval(tick, 1000).unref(); for (const b of bcs) if (b.st === 'running') console.log('Рассылка продолжается:', b.id, b.i + '/' + b.ids.length) }, token: TOKEN };
+  return { touch, setSt, inMsg, route, importCsv, list, start() { setInterval(tick, 1000).unref(); for (const b of bcs) if (b.st === 'running') console.log('Рассылка продолжается:', b.id, b.i + '/' + b.ids.length) }, token: TOKEN };
 };
