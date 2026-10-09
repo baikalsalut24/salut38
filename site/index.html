@@ -435,6 +435,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 .adr{display:grid;gap:10px}.adr>b{font-size:15px}.adr .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}select.f{font-size:16px;padding:13px 14px;border-radius:12px}.f.bad{border-color:#E5121B!important}select.f:disabled{opacity:.55}
 .cal{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px}.cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-weight:900;font-size:16px}.cal-h button{width:40px;height:40px;border-radius:50%;font-size:22px;background:var(--panel);color:var(--text)}.cal-h button:disabled{opacity:.3}.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}.cal-w{font-size:11px;font-weight:800;color:var(--muted);padding:4px 0}.cal-g button{aspect-ratio:1;border-radius:10px;font-weight:800;font-size:15px;background:transparent;color:var(--text)}.cal-g button.ok{background:var(--panel)}.cal-g button.dis{opacity:.28;pointer-events:none}.cal-g button.on{background:#FFD21F;color:#111}.cal-g button.td{box-shadow:inset 0 0 0 2px #FFD21F}.f[readonly]{cursor:pointer}
 .line{grid-template-columns:clamp(120px,42vw,172px) 1fr!important;align-items:start!important;gap:12px}.line .t{width:100%!important;height:auto!important;aspect-ratio:1/1;border-radius:14px!important;position:relative}.line .t.hasv{cursor:pointer}.line .t img{padding:8px}.line .li{display:flex;flex-direction:column;gap:4px;min-width:0}.line .li>b:first-child{font-size:15px;line-height:1.25}.line .li .q{margin-top:6px}.line .li .lt{margin-top:auto;padding-top:8px;font-size:18px;font-weight:900}
+.line .li{position:relative}.line .li>b:first-of-type{padding-right:38px}.rmx{position:absolute;top:-6px;right:-4px;width:36px;height:36px;border-radius:50%;background:#EEF1F8;color:#444;font-size:24px;line-height:34px;text-align:center;padding:0;font-weight:400}.rmx:active{background:#ffd9d6;color:#E5121B}
 /* компактные карточки в выдаче */
 .grid{gap:8px}
 .card{border-radius:14px}
@@ -950,7 +951,7 @@ function renderCart(){
   const lines=items.map(k=>{
     const p=BY.get(k);
     return `<div class="line"><div class="t${(p.v||p.vid)?' hasv':''}"${(p.v||p.vid)?` data-v="${esc(p.sku)}"`:''}>${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${esc(p.sku)}"><i></i>Видео</button>`:''}</div>
-      <div class="li"><b>${p.name}</b><small>${ruble(p.price)}</small>
+      <div class="li"><button type="button" class="rmx" data-rm="${k}" aria-label="Убрать из корзины">×</button><b>${p.name}</b><small>${ruble(p.price)}</small>
         <div class="q"><button data-m="${k}" aria-label="Меньше">−</button><b>${cart[k]}</b><button data-p="${k}" aria-label="Больше">+</button></div>
         <b class="lt">${ruble(p.price*cart[k])}</b></div></div>`}).join('')+`<div class="cardsave"${PROMO_OK?' style="display:none"':''}><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту</a></div>`;
   $('cartBody').innerHTML=secHtml('items','Товары','',lines,OPEN.items);
@@ -1025,6 +1026,7 @@ document.addEventListener('click',e=>{
   if(t.dataset.ck){try{localStorage.setItem('bs_cookie',t.dataset.ck)}catch(e){}window.COOKIE_CHOICE=t.dataset.ck;const b=document.getElementById('ckb');if(b)b.remove();return}
   if(t.dataset.nt){trackPick(t.dataset.nt);return}
   if(t.dataset.tsec){const s=t.closest('.sec');if(OPEN[t.dataset.tsec]!==undefined)setSec(t.dataset.tsec,!s.classList.contains('open'));else{const o=!s.classList.contains('open');s.classList.toggle('open',o);s.querySelector('.sec-b').hidden=!o;t.setAttribute('aria-expanded',o)}return}
+  if(t.dataset.rm){delete cart[t.dataset.rm];sync();return}
   if(t.dataset.p)change(t.dataset.p,1);
   else if(t.dataset.m)change(t.dataset.m,-1);
   else if(t.dataset.sub!==undefined)openSub(+t.dataset.sub);
