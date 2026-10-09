@@ -291,10 +291,10 @@ function selfList(o, c, page) { // весь список товаров из к�
 function removeItem(o, c, by) {
   if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Позиция уже обработана' };
   const i = o.items.findIndex(x => x.sku === c.sku); if (i < 0) return { error: 'Позиции уже нет в заказе' };
-  o.items.splice(i, 1); recalcOrder(o); c.st = 'removed'; c.by = by; c.doneAt = new Date().toISOString(); supNeed(c, 'remove');
+  o.items.splice(i, 1); recalcOrder(o); c.st = 'removed'; c.by = by; c.doneAt = new Date().toISOString(); if (!o.items.length) o.supCancel = { at: c.doneAt, done: false }; // поставщику сообщаем только если заказ опустел целиком
   histAdd(o, by, 'Позиция «' + c.name + '» удалена из заказа (' + by + '). Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString(); persist();
   notifyOrder(o, 'Заказ № ' + o.id + ': позиция «' + c.name + '» удалена. Сумма заказа: ' + money(o.total) + '.');
-  alertText('✖ Заказ № ' + o.id + ': «' + c.name + '» удалена из заказа (' + by + '). ' + (o.items.length ? 'Сумма: ' + money(o.total) + '. ' : 'В заказе не осталось позиций! ') + 'Уведомите поставщика.');
+  alertText('✖ Заказ № ' + o.id + ': «' + c.name + '» удалена из заказа (' + by + '). ' + (o.items.length ? 'Сумма: ' + money(o.total) + '.' : 'В заказе не осталось позиций! Заказ отменён клиентом полностью — уведомите поставщика (список «Уведомить поставщика»).'));
   return { ok: true };
 }
 function startOos(o, sku, by) {
@@ -484,6 +484,7 @@ async function api(req, res, url) {
     }
     if (mm[2] === 'subst' && m === 'POST') { // действия менеджера по замене
       if (!isM) return send(res, 403, { error: 'Только менеджер' }); refreshFeed();
+      if (b.action === 'supcancel') { if (!o.supCancel || o.supCancel.done) return send(res, 400, { error: 'Уведомлять не нужно' }); o.supCancel.done = true; o.supCancel.by = me.name; histAdd(o, me.name, 'Поставщик уведомлён об отмене заказа'); o.updatedAt = new Date().toISOString(); persist(); return send(res, 200, view(o, role)) }
       const c = (o.subst || []).find(x => x.id === String(b.case)); if (!c) return send(res, 404, { error: 'Замена не найдена' });
       let r;
       if (b.action === 'accept') r = acceptSubst(o, c, me.name);
