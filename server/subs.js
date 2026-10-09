@@ -137,7 +137,7 @@ module.exports = function init(ctx) { // ctx: DATA, orders(), ownerOf(order), te
   }
 
   // ---------- рассылки ----------
-  const footer = '\n\nЧтобы отписаться от рассылок, отправьте /stop';
+  const footer = '';
   async function sendTo(id, bc) {
     const text = String(bc.text || '') + (bc.nofooter ? '' : footer), kb = bc.btn && bc.btn.t && /^https?:\/\//.test(bc.btn.u || '') ? { inline_keyboard: [[{ text: bc.btn.t, url: bc.btn.u }]] } : undefined;
     if (bc.img) {

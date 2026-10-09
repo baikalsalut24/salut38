@@ -438,7 +438,7 @@ async function subsImport(f){if(!f)return;try{const t=await f.text();toast('За
 function bcForm(){closeSheet();const bg=document.createElement('div');bg.className='sheet-bg';document.body.appendChild(bg);let img='';
   const tags=(subsD&&subsD.tags||[]).map(t=>`<option value="${esc(t[0])}">${esc(t[0])} (${t[1]})</option>`).join('');
   bg.innerHTML=`<div class="sheet"><div class="sh"><h3>Новая рассылка</h3><button class="x" id="b_x">×</button></div><div class="sb"><div class="pf" style="margin-top:0">
-    <textarea class="note" id="b_t" rows="6" placeholder="Текст сообщения (в конец автоматически добавится «чтобы отписаться, отправьте /stop»)" style="min-height:130px"></textarea>
+    <textarea class="note" id="b_t" rows="6" placeholder="Текст сообщения" style="min-height:130px"></textarea>
     <label for="b_i">Картинка (необязательно)</label><input type="file" id="b_i" accept="image/jpeg,image/png"><div class="mt" id="b_im"></div>
     <input class="f" id="b_bt" placeholder="Текст кнопки (необязательно), напр. Открыть магазин"><input class="f" id="b_bu" placeholder="Ссылка кнопки, https://…">
     <label>Кому</label><select class="sel" id="b_seg"><option value="">Всем живым подписчикам</option><option value="ordered">Тем, кто заказывал</option><option value="never">Тем, кто не заказывал</option><option value="lapsed">Давно не заказывали</option></select>
