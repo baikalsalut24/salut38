@@ -239,19 +239,18 @@ const shotsOf = sku => { const g = gpData()[sku], r = g && (g.p || []).find(x =>
 const visibleNow = b => !hiddenNow(b.sku) && !FEED.hd.includes(b.sku);
 const PM_NUM = /выстрел|калибр|высот|длительн|время|эффект|мощност|залп|диаметр/i; // числовые характеристики для сравнения
 const numsOf = sku => { const g = gpData()[sku], o = {}; for (const r of (g && g.p) || []) { if (!PM_NUM.test(r[0])) continue; const v = parseFloat(String(r[1]).replace(',', '.').replace(/[^\d.:]/g, '').replace(/^(\d+):(\d+)$/, (m, x, y) => +x * 60 + +y)); if (v > 0) o[String(r[0]).toLowerCase().trim()] = v } return o };
-function suggestFor(sku, exclude, byPrice) { // замена: та же категория, близкие характеристики (выстрелы, калибр, высота, время), ближайшая цена; бренд — любой, свой чуть предпочтительнее
+function suggestFor(sku, exclude) { // замена: та же категория, близкие характеристики (выстрелы, калибр, высота, время), ближайшая цена; бренд — любой, свой чуть предпочтительнее
   const base = BASE.find(b => b.sku === sku); if (!base) return null;
   const p0 = priceOf(sku, base.price) || 1, n0 = numsOf(sku), c0 = base.cats || []; let best = null, bs = -1e9;
   for (const b of BASE) {
     if (b.sku === sku || exclude.includes(b.sku) || !visibleNow(b)) continue;
     const pr = priceOf(b.sku, b.price); if (!(pr > 0) || pr < p0 * 0.5 || pr > p0 * 1.6) continue;
     const shared = (b.cats || []).filter(c => c0.includes(c)).length; if (!shared) continue; // только своя категория
-    if (byPrice) { const sc2 = -Math.abs(pr - p0) / p0; if (sc2 > bs) { bs = sc2; best = b } continue } // «другая замена»: следующий ближайший по цене в той же категории
-    let sc = 20 + shared * 5; if (b.brand && b.brand === base.brand) sc += 6;
-    const d = (pr - p0) / p0; sc -= Math.abs(d) * 70 + (d > 0 ? d * 30 : 0);
+    let sc = 20 + shared * 5; if (b.brand && b.brand === base.brand) sc += 3; // приоритет: характеристики, затем цена, затем бренд
+    const d = (pr - p0) / p0; sc -= Math.abs(d) * 30 + (d > 0 ? d * 12 : 0);
     const n1 = numsOf(b.sku); let cnt = 0, diff = 0;
     for (const k in n0) if (n1[k]) { cnt++; diff += Math.abs(n1[k] - n0[k]) / Math.max(n1[k], n0[k]) }
-    if (cnt) sc -= diff / cnt * 45; else if (Object.keys(n0).length) sc -= 10;
+    if (cnt) sc -= diff / cnt * 120; else if (Object.keys(n0).length) sc -= 25;
     if (sc > bs) { bs = sc; best = b }
   }
   return best ? { sku: best.sku, name: best.name, price: priceOf(best.sku, best.price), img: FEED.im[best.sku] || best.img || '' } : null;
@@ -265,12 +264,12 @@ function recalcOrder(o) {
 }
 const histAdd = (o, by, note) => (o.history = o.history || []).push({ at: new Date().toISOString(), by, role: 'system', from: o.status, to: o.status, note });
 function chatOf(o) { const n = o.notify; return n && n.channel === 'telegram' && n.linked && n.chatId ? String(n.chatId) : '' }
-function sendOffer(o, c) { // клиенту в Telegram: что закончилось, чем предлагаем заменить, две кнопки
+function sendOffer(o, c, remind) { // клиенту в Telegram: что закончилось, чем предлагаем заменить, две кнопки
   const of = c.offer; if (!of) return false; const chat = chatOf(o); if (!chat || !BOT) { c.noChat = true; return false }
   const diff = (of.price - c.price) * c.qty;
-  const text = 'К сожалению, «' + c.name + '» закончился (заказ № ' + o.id + ').\n\nПредлагаем замену:\n«' + of.name + '» — ' + money(of.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\nБыло: ' + money(c.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\n' + (diff === 0 ? 'Сумма заказа не изменится.' : diff > 0 ? 'Сумма заказа увеличится на ' + money(diff) + '.' : 'Сумма заказа уменьшится на ' + money(-diff) + '.') + '\n\nУтвердить замену или подобрать другую?';
-  BOT.send('telegram', chat, text, imgUrl(of.img), { inline_keyboard: [[{ text: '✅ Утвердить замену', callback_data: 'so:' + o.id + ':' + c.id }, { text: '🔄 Другая замена', callback_data: 'sn:' + o.id + ':' + c.id }]] });
-  c.sentAt = new Date().toISOString(); c.noChat = false; return true;
+  const text = (remind ? '⏰ Напоминаем: нужно решить с заменой по заказу № ' + o.id + '.\n\n' : '') + 'К сожалению, «' + c.name + '» закончился (заказ № ' + o.id + ').\n\nПредлагаем замену:\n«' + of.name + '» — ' + money(of.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\nБыло: ' + money(c.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\n' + (diff === 0 ? 'Сумма заказа не изменится.' : diff > 0 ? 'Сумма заказа увеличится на ' + money(diff) + '.' : 'Сумма заказа уменьшится на ' + money(-diff) + '.') + '\n\nУтвердить замену, подобрать другую или выбрать товар самостоятельно?';
+  BOT.send('telegram', chat, text, imgUrl(of.img), { inline_keyboard: [[{ text: '✅ Утвердить замену', callback_data: 'so:' + o.id + ':' + c.id }], [{ text: '🔄 Следующая автозамена', callback_data: 'sn:' + o.id + ':' + c.id }], [{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + o.id + ':' + c.id }]] });
+  c.sentAt = new Date().toISOString(); c.noChat = false; if (!remind) { c.rem = 0; c.remAt = ''; c.cold = false } return true;
 }
 function startOos(o, sku, by) {
   const it = o.items.find(i => i.sku === sku); if (!it) return { error: 'Нет такой позиции' };
@@ -300,17 +299,31 @@ function nextSubst(o, c, by, sku) {
   if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Замена уже обработана' };
   let off = null;
   if (sku) { const b = BASE.find(x => x.sku === sku); if (!b) return { error: 'Товар не найден' }; if (!visibleNow(b)) return { error: 'Этот товар сейчас скрыт или закончился' }; off = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' } }
-  else if (c.tried.length < 4) off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried], true);
+  else if (c.tried.length < 4) off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried]);
   if (!off) { c.st = 'manual'; c.offer = null; histAdd(o, by, 'Подходящих замен для «' + c.name + '» больше нет — нужна связь с клиентом'); o.updatedAt = new Date().toISOString(); persist();
     if (by === 'клиент') { notifyOrder(o, 'Заказ № ' + o.id + ': подходящих замен больше не нашли. Оператор свяжется с вами по телефону ' + o.phone + '.'); alertText('⚠️ Заказ № ' + o.id + ': клиент отказался от замены «' + c.name + '», вариантов больше нет. Позвоните: ' + o.phone) } return { ok: true } }
-  c.offer = off; c.st = 'wait'; c.tried.push(off.sku); histAdd(o, by, 'Другая замена для «' + c.name + '»: ' + off.name); o.updatedAt = new Date().toISOString();
+  c.offer = off; c.st = 'wait'; c.self = false; c.tried.push(off.sku); histAdd(o, by, 'Другая замена для «' + c.name + '»: ' + off.name); o.updatedAt = new Date().toISOString();
   const sent = sendOffer(o, c); persist();
   if (by === 'клиент') alertText('🔄 Заказ № ' + o.id + ': клиент просит другую замену для «' + c.name + '». Предложено: «' + off.name + '».');
   return { ok: true, sent };
 }
+const irkHour = () => new Date(Date.now() + 8 * 3600e3).getUTCHours();
+function remindSubst() { // раз в 60 минут с 9:00 до 21:00 по Иркутску, максимум 3 напоминания
+  const h = irkHour(); if (h < 9 || h >= 21) return; let ch = false;
+  for (const o of Object.values(orders)) for (const c of o.subst || []) {
+    if (c.st !== 'wait' || c.self || c.cold || c.noChat || !c.offer || !chatOf(o)) continue;
+    const last = Date.parse(c.remAt || c.sentAt || c.at); if (!(Date.now() - last >= 3600e3)) continue;
+    if ((c.rem || 0) >= 3) { c.cold = true; c.coldAt = new Date().toISOString(); histAdd(o, 'система', 'Клиент не ответил на 3 напоминания о замене «' + c.name + '». Нужен звонок оператора'); o.updatedAt = c.coldAt; ch = true;
+      alertText('🥶 Заказ № ' + o.id + ': клиент не ответил на замену «' + c.name + '» после 3 напоминаний. Позвоните: ' + o.phone); continue }
+    if (sendOffer(o, c, true)) { c.rem = (c.rem || 0) + 1; c.remAt = new Date().toISOString(); ch = true }
+  }
+  if (ch) persist() }
+setInterval(remindSubst, 5 * 60e3).unref();
 function substAnswer(act, orderId, caseId, chat) { // нажатие кнопок клиента в боте
   const o = orders[orderId], c = o && (o.subst || []).find(x => x.id === caseId); if (!c || chatOf(o) !== String(chat)) return 'Это предложение уже недоступно.';
   if (c.st !== 'wait') return 'Это предложение уже обработано.';
+  if (act === 'self') { c.self = true; c.selfAt = new Date().toISOString(); c.cold = false; histAdd(o, 'клиент', 'Клиент хочет выбрать замену для «' + c.name + '» самостоятельно'); o.updatedAt = new Date().toISOString(); persist();
+    alertText('🔍 Заказ № ' + o.id + ': клиент хочет сам выбрать замену для «' + c.name + '». Свяжитесь с ним: ' + o.phone); return { text: 'Хорошо! Напишите сюда название или артикул товара, который хотите вместо «' + c.name + '», либо выберите его на сайте ' + (process.env.SHOP_URL || 'https://salut38.shop') + ' и сообщите нам. Оператор подтвердит замену.' } }
   const r = act === 'ok' ? acceptSubst(o, c, 'клиент') : nextSubst(o, c, 'клиент'); return r.error ? r.error : '';
 }
 const digits = s => String(s || '').replace(/\D/g, '').replace(/^8(?=\d{10}$)/, '7');
