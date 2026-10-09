@@ -46,12 +46,12 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     if (!c) { const k = newCode(); c = { code: k.code, aliases: [k.alias], kind: 'card', type: 'tiers', value: null, until: '', note: 'Бот ' + ch + (name ? ': ' + String(name).slice(0, 40) : ''), active: true, createdAt: new Date().toISOString(), by: 'бот', owner: { ch, id: String(id) } }; promos.push(c); ctx.savePromos() }
     return c;
   }
-  const cardText = c => 'Ваша дисконтная карта «Байкал Салют»\n№ ' + c.code + '\n\nСкидка от 5% до 30% — чем больше заказ, тем больше скидка. Введите номер карты в корзине, в поле «Промокод или номер дисконтной карты».' + (SITE ? '\n\nСайт: ' + SITE : '') + '\n\nКарта личная, хранится у нас: если потеряете, напишите боту /card — пришлём снова.';
+  const cardText = c => 'Ваша дисконтная карта «Байкал Салют»\n№ ' + c.code + '\n\nСкидка от 5% до 30% — чем больше заказ, тем больше скидка. Введите номер карты в корзине, в поле «Промокод или номер дисконтной карты».' + (SHOP_URL ? '\n\nСайт: ' + SHOP_URL : '') + '\n\nКарта личная, хранится у нас: если потеряете, напишите боту /card — пришлём снова.';
   const KB = { keyboard: [[{ text: '💳 Моя карта' }, { text: '📦 Мой заказ' }]], resize_keyboard: true };
   const dLabel = p => p.type === 'percent' ? 'Скидка ' + p.value + '%' : p.type === 'amount' ? 'Скидка ' + p.value + ' ₽' : 'Скидка от 5% до 30% (зависит от суммы заказа)';
   const fmtD = d => String(d).split('-').reverse().join('.');
-  const promoText = p => 'Ваш промокод: ' + p.code + '\n' + dLabel(p) + (p.until ? '\nДействует до ' + fmtD(p.until) : '') + '\n\nВведите его в корзине на сайте, в поле «Промокод или номер дисконтной карты».' + (SITE ? '\n\nСайт: ' + SITE : '');
-  const welcome = 'Здравствуйте! Это бот магазина «Байкал Салют».\n\n💳 Моя карта — личная дисконтная карта\n📦 Мой заказ — статус заказа (напишите номер заказа и последние 4 цифры телефона, например: 1234 5678)\n\nПромокоды выдаются по ссылкам из акций и рекламы.' + (SITE ? '\n\nСайт: ' + SITE : '');
+  const promoText = p => 'Ваш промокод: ' + p.code + '\n' + dLabel(p) + (p.until ? '\nДействует до ' + fmtD(p.until) : '') + '\n\nВведите его в корзине на сайте, в поле «Промокод или номер дисконтной карты».' + (SHOP_URL ? '\n\nСайт: ' + SHOP_URL : '');
+  const welcome = 'Здравствуйте! Это бот магазина «Байкал Салют».\n\n💳 Моя карта — личная дисконтная карта\n📦 Мой заказ — статус заказа (напишите номер заказа и последние 4 цифры телефона, например: 1234 5678)\n\nПромокоды выдаются по ссылкам из акций и рекламы.' + (SHOP_URL ? '\n\nСайт: ' + SHOP_URL : '');
   const fails = new Map(); // защита от подбора заказов: не больше 5 неудач в час с одного чата
   const failOk = id => { const f = (fails.get(id) || []).filter(t => Date.now() - t < 36e5); fails.set(id, f); if (fails.size > 5000) fails.clear(); return f.length < 5 };
   const failAdd = id => { const f = fails.get(id) || []; f.push(Date.now()); fails.set(id, f) };
@@ -78,7 +78,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
           if (ch === 'telegram' && fs.existsSync(pf)) return sendPhotoFile(u.chatId, pf, promoText(p), kb, 'promo.jpg');
           return say(promoText(p));
         }
-        return say('К сожалению, этот промокод уже не действует.' + (SITE ? '\nАктуальные предложения: ' + SITE : ''));
+        return say('К сожалению, этот промокод уже не действует.' + (SHOP_URL ? '\nАктуальные предложения: ' + SHOP_URL : ''));
       }
       const o = key && Object.values(ctx.orders()).find(x => x.notify && x.notify.token === key && x.notify.channel === ch);
       if (o) { o.notify.chatId = String(u.chatId); o.notify.linked = true; ctx.persist(); return say('Готово! Будем сообщать о статусе заказа здесь.\n' + ctx.statusText(o)) }
