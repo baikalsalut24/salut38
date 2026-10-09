@@ -16,9 +16,10 @@ const PUB = path.join(__dirname, 'public');
 fs.mkdirSync(DATA, { recursive: true });
 
 /* ---------- хранилище ---------- */
-const F = { orders: path.join(DATA, 'orders.json'), users: path.join(DATA, 'users.json'), sessions: path.join(DATA, 'sessions.json'), promos: path.join(DATA, 'promos.json'), carts: path.join(DATA, 'carts.json'), catalog: path.join(DATA, 'catalog.json') };
+const F = { orders: path.join(DATA, 'orders.json'), users: path.join(DATA, 'users.json'), sessions: path.join(DATA, 'sessions.json'), promos: path.join(DATA, 'promos.json'), carts: path.join(DATA, 'carts.json'), catalog: path.join(DATA, 'catalog.json'), cardcfg: path.join(DATA, 'card-cfg.json') };
 const load = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const save = (f, v) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(v)); fs.renameSync(t, f); };
+let cardCfg = load(F.cardcfg, null) || { type: 'tiers', value: null, until: '', active: true}; // общие настройки всех дисконтных карт
 let orders = load(F.orders, {}), users = load(F.users, null), sessions = load(F.sessions, {}), promos = load(F.promos, null), carts = load(F.carts, {}), cat = load(F.catalog, {}); // cat: правки каталога {sku:{p:цена,h:1 скрыт,by,at}}
 const BASE0 = load(path.join(__dirname, 'catalog.json'), []); // базовый каталог (файл catalog.json)
 // Выгрузка поставщика (САЛЮТ-1): цены, скрытые товары и новые карточки. Пишет sync.js в DATA/feed.json
@@ -625,6 +626,19 @@ async function api(req, res, url) {
 
   if (p.startsWith('/api/subs') || p.startsWith('/api/broadcasts')) { if (!isM) return send(res, 403, { error: 'Только менеджер' }); if (!SUBS) return send(res, 503, { error: 'Подписчики недоступны' }); return SUBS.route(req, res, url, me, send) }
   if (p === '/api/botinfo') { if (!isM) return send(res, 403, { error: 'Только менеджер' }); return send(res, 200, { tg: TG_BOT, max: MAX_BOT }) }
+  if (p === '/api/promo-cards') { // общие настройки всех дисконтных карт
+    if (!isM) return send(res, 403, { error: 'Только менеджер' });
+    if (m === 'GET') return send(res, 200, { cfg: cardCfg, count: promos.filter(x => x.kind === 'card').length });
+    if (m === 'PATCH') {
+      const b = await body(req).catch(() => ({})), type = ['percent', 'amount', 'tiers'].includes(b.type) ? b.type : cardCfg.type; let value = null;
+      if (type === 'percent') { value = Math.round(+b.value); if (!(value >= 1 && value <= 90)) return send(res, 400, { error: 'Процент от 1 до 90' }) }
+      if (type === 'amount') { value = Math.round(+b.value); if (!(value >= 1 && value <= 1e6)) return send(res, 400, { error: 'Сумма скидки в рублях, от 1' }) }
+      const until = /^\d{4}-\d{2}-\d{2}$/.test(String(b.until || '')) ? String(b.until) : '';
+      cardCfg = { type, value, until, active: b.active !== false }; save(F.cardcfg, cardCfg);
+      let n = 0; for (const x of promos) if (x.kind === 'card') { x.type = type; x.value = value; x.until = until; x.active = cardCfg.active; n++ }
+      save(F.promos, promos); return send(res, 200, { cfg: cardCfg, count: n });
+    }
+  }
   if (p === '/api/promos') {
     if (!isM) return send(res, 403, { error: 'Только менеджер' });
     if (m === 'GET') return send(res, 200, promos.map(promoPub).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
@@ -710,6 +724,6 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
     const pr = o.promo ? findPromo(o.promo) : null; return pr && pr.owner && pr.owner.ch === 'telegram' ? String(pr.owner.id) : '';
   };
   SUBS = require('./subs')({ DATA, alert: alertText, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
-  BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), orders: () => orders, persist, statusText, irkToday, substAnswer }); BOT.start() });
+  BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), cardDefaults: () => cardCfg, orders: () => orders, persist, statusText, irkToday, substAnswer }); BOT.start() });
 
 if (process.env.BS_TEST) module.exports = { orders, BASE, startOos, substAnswer, remindSubst, setBot: b => { BOT = b }, cat };

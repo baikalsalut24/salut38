@@ -36,7 +36,7 @@ nav.tabs button{display:flex;align-items:center;gap:14px;padding:14px 12px;borde
 nav.tabs button svg{width:24px;height:24px;flex:none}
 nav.tabs button.on{color:var(--text);background:#FFF3B8}
 nav.tabs .n{margin-left:auto;background:var(--r);color:#fff;font-size:12px;font-weight:900;min-width:22px;height:22px;border-radius:11px;display:grid;place-items:center;padding:0 6px}
-.ptb{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}.pr{display:grid;grid-template-columns:minmax(0,1fr) 58px 34px 90px;gap:6px;align-items:center;padding:11px 12px;border-top:1px solid var(--line);cursor:pointer;font-size:14px}.pr.h{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;border-top:0;background:#F7F8FC;cursor:default;padding:8px 12px}.pr.off{opacity:.6}.pcd{font-weight:900;letter-spacing:.02em;overflow-wrap:anywhere}.pd{padding:2px 12px 12px;background:#FAFBFE;border-top:1px dashed var(--line)}
+.ptb{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}.pr{display:grid;grid-template-columns:minmax(0,1fr) 58px 34px 90px;gap:6px;align-items:center;padding:11px 12px;border-top:1px solid var(--line);cursor:pointer;font-size:14px}.pr.h{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;border-top:0;background:#F7F8FC;cursor:default;padding:8px 12px}.pr.off{opacity:.6}.pd .bt{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.pd .bt button{background:#EEF1F8;border-radius:10px;padding:11px 8px;font-weight:800;font-size:13px}.pd .bt button.d{background:#fff;color:var(--r);border:1.5px solid var(--r)}.pd .bt button.pri{background:var(--y);color:#111;grid-column:1/-1}.pd .cfg{display:grid;gap:8px;margin-top:10px}.pd .cfg label{font-size:12px;font-weight:800;color:var(--muted)}.pgh{padding:7px 12px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;background:#F7F8FC;border-top:1px solid var(--line)}.pcd{font-weight:900;letter-spacing:.02em;overflow-wrap:anywhere}.pd{padding:2px 12px 12px;background:#FAFBFE;border-top:1px dashed var(--line)}
 .bub{max-width:84%;padding:8px 11px;border-radius:14px;margin:8px 0;white-space:pre-wrap;word-break:break-word;font-size:15px}.bub small{display:block;color:var(--muted);font-size:11px;margin-top:3px}.bub.in{background:#fff;border:1px solid var(--line)}.bub.out{background:#FFF3B8;margin-left:auto}
 .ib.mb{position:relative}.ib.mb .n{position:absolute;top:-3px;right:-3px;background:var(--r);color:#fff;font-size:10px;font-weight:900;min-width:17px;height:17px;border-radius:9px;display:grid;place-items:center;padding:0 4px}
 .ph{position:relative;display:inline-block;z-index:0;font-weight:900;text-transform:uppercase;line-height:1.05;padding:8px 14px;margin:2px 0 12px;transform:rotate(-1.5deg);font-size:19px;background:var(--y);color:#111;border-radius:3px;box-shadow:3px 3px 0 rgba(16,22,42,.12)}
@@ -377,21 +377,37 @@ function promoLine(o){const i=o.promoInfo;let pl='';
     else pl=' <span class="pill warn">нет в списке, проверьте вручную</span>'}
   return `<div style="margin-top:6px"><b>Промокод/карта:</b> ${esc(o.promo)}${pl}</div>`}
 let promos=null,botInfo=null;
-async function loadPromos(){try{promos=await api('/api/promos');if(!botInfo)try{botInfo=await api('/api/botinfo')}catch{}if(tab==='promos')drawPromos();load()}catch(e){toast(e.error,true)}}
+let cardCfgD=null;
+async function loadPromos(){try{promos=await api('/api/promos');try{cardCfgD=await api('/api/promo-cards')}catch{}if(!botInfo)try{botInfo=await api('/api/botinfo')}catch{}if(tab==='promos')drawPromos();load()}catch(e){toast(e.error,true)}}
 function fmtDate(d){return d?new Date(d+'T00:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}):''}
 const blink=k=>botInfo&&botInfo.tg?'https://t.me/'+botInfo.tg+'?start='+k:'';
 function botBox(){const l=blink('card');return l?`<div class="pc"><div class="r1"><span class="cd">Ссылка на бота</span></div><div class="mt">Дисконтная карта: ${esc(l)}</div><div class="mt">Статусы заказов клиентам привязываются автоматически. Просто ссылку без параметра (t.me/${esc(botInfo.tg)}) не раздавайте: по ней бот только здоровается.</div><div class="bt"><button data-cp="${esc(l)}">Копировать ссылку на карту</button></div></div>`:''}
 let promoOpen=new Set(),promoQ='';
 const pshort=p=>p.type==='percent'?p.value+'%':p.type==='amount'?rub(p.value):'5–30%';
+function promoRow(p,SL){const o=promoOpen.has(p.code);
+  return `<div class="pr ${p.state==='ok'?'':'off'}" data-row="${esc(p.code)}"><span class="pcd">${esc(p.code)}${p.kind==='card'?' <i class="pill card">карта</i>':''}</span><span>${esc(pshort(p))}</span><span>${p.uses}</span><span><span class="pill ${SL[p.state][1]}">${SL[p.state][0]}</span></span></div>`+(o?`<div class="pd"><div class="ds">${esc(dlabel(p))}</div>
+    <div class="mt">Использован: ${p.uses} · на сумму ${rub(p.sum)}${p.disc?' · скидок на '+rub(p.disc):''}${p.until?' · до '+esc(fmtDate(p.until)):''}</div>${p.note?`<div class="mt">«${esc(p.note)}»</div>`:''}${p.slug?`<div class="mt">Метка бота: promo_${esc(p.slug)}</div>`:''}
+    <div class="bt"><button data-cp="${esc(p.code)}">Копировать код</button>${p.slug&&blink('promo_'+p.slug)?`<button data-cp="${esc(blink('promo_'+p.slug))}">Ссылка для бота</button>`:''}<button data-tg="${esc(p.code)}">${p.active?'Поставить на паузу':'Включить'}</button><button class="d" data-rm="${esc(p.code)}">Удалить</button></div></div>`:'')}
+function cardsGroup(cards,q,SL){const n=cards.length,uses=cards.reduce((s,c)=>s+c.uses,0),sum=cards.reduce((s,c)=>s+c.sum,0),disc=cards.reduce((s,c)=>s+c.disc,0),used=cards.filter(c=>c.uses).length;
+  const cfg=(cardCfgD&&cardCfgD.cfg)||{type:'tiers',value:null,until:'',active:true},o=promoOpen.has('__cards'),on=cfg.active!==false;
+  let h=`<div class="pr ${on?'':'off'}" data-row="__cards"><span class="pcd">Дисконтные карты <i class="pill card">${n}</i></span><span>${esc(pshort(cfg))}</span><span>${uses}</span><span><span class="pill ${on?'ok':'warn'}">${on?'Действуют':'Пауза'}</span></span></div>`;
+  if(o)h+=`<div class="pd"><div class="ds">Общие настройки всех карт (${n})</div><div class="mt">Выдано карт: ${n} · использовали: ${used} · заказов: ${uses} на ${rub(sum)}${disc?' · скидок на '+rub(disc):''}</div>
+    <div class="cfg"><label for="cc_t">Скидка</label><select class="sel" id="cc_t"><option value="tiers" ${cfg.type==='tiers'?'selected':''}>По системе скидок (5–30% по сумме заказа)</option><option value="percent" ${cfg.type==='percent'?'selected':''}>В процентах</option><option value="amount" ${cfg.type==='amount'?'selected':''}>В рублях</option></select>
+    <input class="f" id="cc_v" inputmode="numeric" placeholder="${cfg.type==='amount'?'Сколько рублей':'Сколько процентов, 1–90'}" value="${cfg.value||''}" ${cfg.type==='tiers'?'hidden':''}>
+    <label for="cc_u">Действуют до (необязательно)</label><input class="f" id="cc_u" type="date" value="${esc(cfg.until||'')}">
+    <label for="cc_a">Состояние</label><select class="sel" id="cc_a"><option value="1" ${on?'selected':''}>Действуют</option><option value="0" ${on?'':'selected'}>На паузе</option></select></div>
+    <div class="bt"><button class="pri" data-cfgsave="1">Применить ко всем ${n} картам</button></div><div class="mt" style="margin-top:8px">Новые карты, которые бот будет выдавать, получают те же настройки. Найти конкретную карту можно поиском по номеру.</div></div>`;
+  if(q){const f=cards.filter(c=>c.code.toLowerCase().includes(q)||(c.aliases||[]).some(a=>a.toLowerCase().includes(q))||(c.note||'').toLowerCase().includes(q)).slice(0,20);if(f.length)h+=`<div class="pgh">Найдено карт: ${f.length}${f.length===20?'+':''}</div>`+f.map(c=>promoRow(c,SL)).join('')}
+  return h}
 function promoList(){
   if(!promos)return'<div class="empty">Загрузка…</div>';
   if(!promos.length)return'<div class="empty">Промокодов пока нет. Нажмите «+», чтобы добавить первый.</div>';
-  const SL={ok:['Действует','ok'],paused:['Пауза','warn'],expired:['Истёк','warn']},q=promoQ.trim().toLowerCase();
-  const l=promos.filter(p=>!q||p.code.toLowerCase().includes(q)||(p.note||'').toLowerCase().includes(q)).slice().sort((x,y)=>x.code.localeCompare(y.code,'ru',{numeric:true}));
-  return botBox()+`<div class="ptb"><div class="pr h"><span>Код</span><span>Скидка</span><span>Раз</span><span>Статус</span></div>`+(l.length?l.map(p=>{const o=promoOpen.has(p.code);
-    return `<div class="pr ${p.state==='ok'?'':'off'}" data-row="${esc(p.code)}"><span class="pcd">${esc(p.code)}${p.kind==='card'?' <i class="pill card">карта</i>':''}</span><span>${esc(pshort(p))}</span><span>${p.uses}</span><span><span class="pill ${SL[p.state][1]}">${SL[p.state][0]}</span></span></div>`+(o?`<div class="pd"><div class="ds">${esc(dlabel(p))}</div>
-    <div class="mt">Использован: ${p.uses} · на сумму ${rub(p.sum)}${p.disc?' · скидок на '+rub(p.disc):''}${p.until?' · до '+esc(fmtDate(p.until)):''}</div>${p.note?`<div class="mt">«${esc(p.note)}»</div>`:''}${p.slug?`<div class="mt">Метка бота: promo_${esc(p.slug)}</div>`:''}
-    <div class="bt"><button data-cp="${esc(p.code)}">Копировать</button>${p.slug&&blink('promo_'+p.slug)?`<button data-cp="${esc(blink('promo_'+p.slug))}">Ссылка для бота</button>`:''}<button data-tg="${esc(p.code)}">${p.active?'Поставить на паузу':'Включить'}</button><button class="d" data-rm="${esc(p.code)}">Удалить</button></div></div>`:'')}).join(''):'<div class="empty" style="padding:16px">Ничего не найдено</div>')+'</div>'}
+  const SL={ok:['Действует','ok'],paused:['Пауза','warn'],expired:['Истёк','warn']},q=promoQ.trim().toLowerCase(),cmp=(x,y)=>x.code.localeCompare(y.code,'ru',{numeric:true});
+  const codes=promos.filter(p=>p.kind!=='card'&&(!q||p.code.toLowerCase().includes(q)||(p.note||'').toLowerCase().includes(q))),cards=promos.filter(p=>p.kind==='card');
+  const act=codes.filter(p=>p.state==='ok').sort(cmp),old=codes.filter(p=>p.state!=='ok').sort(cmp);
+  return botBox()+`<div class="ptb"><div class="pr h"><span>Код</span><span>Скидка</span><span>Раз</span><span>Статус</span></div>`+(cards.length?cardsGroup(cards,q,SL):'')
+   +(act.length?act.map(p=>promoRow(p,SL)).join(''):'')+(old.length?`<div class="pgh">Недействующие</div>`+old.map(p=>promoRow(p,SL)).join(''):'')
+   +(!act.length&&!old.length&&!cards.length?'<div class="empty" style="padding:16px">Ничего не найдено</div>':'')+'</div>'}
 function promoForm(){
   closeSheet();const bg=document.createElement('div');bg.className='sheet-bg';document.body.appendChild(bg);
   bg.innerHTML=`<div class="sheet"><div class="sh"><h3>Новый промокод</h3><button class="x" id="pc_x">×</button></div><div class="sb"><div class="pf" style="margin-top:0">
@@ -417,10 +433,12 @@ function drawPromos(){const mn=$('#mn');
   if(!$('#pl')){
     mn.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div class="ph">Промокоды</div><button id="pc_plus" aria-label="Добавить промокод" style="width:46px;height:46px;border-radius:50%;background:var(--y);color:#111;font-size:30px;font-weight:700;line-height:46px;text-align:center;box-shadow:0 3px 10px rgba(16,22,42,.2);flex:none">+</button></div><input class="search" id="pc_q" type="search" placeholder="Поиск по коду" value="${esc(promoQ)}"><div id="pl"></div>`;
     mn.oninput=e=>{if(e.target.id==='pc_q'){promoQ=e.target.value;$('#pl').innerHTML=promoList()}};
+    mn.onchange=e=>{if(e.target.id==='cc_t'){const v=$('#cc_v');v.hidden=e.target.value==='tiers';v.placeholder=e.target.value==='amount'?'Сколько рублей':'Сколько процентов, 1–90'}};
     mn.onclick=async e=>{const cp=e.target.closest('[data-cp]'),tg=e.target.closest('[data-tg]'),rm=e.target.closest('[data-rm]');
       try{
         if(e.target.closest('#pc_plus'))promoForm();
         else if(e.target.closest('[data-row]')&&!cp&&!tg&&!rm){const c=e.target.closest('[data-row]').dataset.row;promoOpen.has(c)?promoOpen.delete(c):promoOpen.add(c);$('#pl').innerHTML=promoList()}
+        else if(e.target.closest('[data-cfgsave]')){const t=$('#cc_t').value,v=$('#cc_v').value,u=$('#cc_u').value,a=$('#cc_a').value==='1';if(!confirm('Применить эти настройки ко всем дисконтным картам?'))return;await api('/api/promo-cards',{method:'PATCH',body:{type:t,value:v,until:u,active:a}});toast('Настройки применены ко всем картам',false,true);await loadPromos()}
         else if(cp){try{await navigator.clipboard.writeText(cp.dataset.cp);toast('Скопировано: '+cp.dataset.cp,false,true)}catch{toast('Не удалось скопировать',true)}}
         else if(tg){const p=promos.find(x=>x.code===tg.dataset.tg);await api('/api/promos',{method:'PATCH',body:{code:p.code,active:!p.active}});await loadPromos()}
         else if(rm){if(confirm('Удалить код '+rm.dataset.rm+'? У старых заказов он останется в тексте.')){await api('/api/promos',{method:'DELETE',body:{code:rm.dataset.rm}});await loadPromos()}}

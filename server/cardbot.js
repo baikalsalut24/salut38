@@ -43,7 +43,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
   const newCode = () => { const promos = ctx.promos(); for (;;) { const n = String(crypto.randomInt(0, 1e6)).padStart(6, '0'), code = '38-' + n; if (!promos.some(p => p.code === code || (p.aliases || []).includes('38' + n))) return { code, alias: '38' + n } } };
   function cardFor(ch, id, name) {
     const promos = ctx.promos(); let c = promos.find(p => p.owner && p.owner.ch === ch && p.owner.id === String(id));
-    if (!c) { const k = newCode(); c = { code: k.code, aliases: [k.alias], kind: 'card', type: 'tiers', value: null, until: '', note: 'Бот ' + ch + (name ? ': ' + String(name).slice(0, 40) : ''), active: true, createdAt: new Date().toISOString(), by: 'бот', owner: { ch, id: String(id) } }; promos.push(c); ctx.savePromos() }
+    if (!c) { const k = newCode(); c = { code: k.code, aliases: [k.alias], kind: 'card', ...(ctx.cardDefaults ? (({ type, value, until, active }) => ({ type, value, until, active }))(ctx.cardDefaults()) : { type: 'tiers', value: null, until: '', active: true }), note: 'Бот ' + ch + (name ? ': ' + String(name).slice(0, 40) : ''), createdAt: new Date().toISOString(), by: 'бот', owner: { ch, id: String(id) } }; promos.push(c); ctx.savePromos() }
     return c;
   }
   const cardText = c => 'Ваша дисконтная карта «Байкал Салют»\n№ ' + c.code + '\n\nСкидка от 5% до 30% — чем больше заказ, тем больше скидка. Введите номер карты в корзине, в поле «Промокод или номер дисконтной карты».' + (SHOP_URL ? '\n\nСайт: ' + SHOP_URL : '') + '\n\nКарта личная, хранится у нас: если потеряете, напишите боту /card — пришлём снова.';
