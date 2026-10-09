@@ -308,7 +308,7 @@ function startOos(o, sku, by) {
   if (off) { c.offer = off; c.tried.push(off.sku); histAdd(o, by, 'Закончился: ' + it.name + '. Предложена замена: ' + off.name); sendOffer(o, c) }
   else { c.autoOff = true; histAdd(o, by, 'Закончился: ' + it.name + '. Подходящей замены автоматически не нашлось'); if (!sendOffer(o, c)) c.st = 'manual' }
   o.updatedAt = new Date().toISOString(); persist();
-  alertText('📦 В заказе № ' + o.id + ' закончился товар «' + it.name + '». ' + (c.offer ? (c.noChat ? 'Клиент не в Telegram — предложите замену «' + c.offer.name + '» по телефону: ' + o.phone : 'Клиенту отправлена замена «' + c.offer.name + '», ждём ответ.') : 'Автозамены нет — свяжитесь с клиентом: ' + o.phone));
+  alertText('📦 В заказе № ' + o.id + ' закончился товар «' + it.name + '». ' + (c.offer ? (c.noChat ? 'ЗВОНИТЬ ВРУЧНУЮ: клиент не в боте — предложите замену «' + c.offer.name + '» по телефону: ' + o.phone : 'Клиенту отправлена замена «' + c.offer.name + '», ждём ответ.') : 'Автозамены нет — свяжитесь с клиентом: ' + o.phone));
   return { ok: true };
 }
 function acceptSubst(o, c, by) {
