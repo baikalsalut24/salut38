@@ -73,7 +73,11 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
       if (key === 'card') return card();
       if (key && key.startsWith('promo_')) {
         const slug = key.slice(6).toLowerCase(), p = ctx.promos().find(x => x.kind === 'promo' && x.slug === slug);
-        if (p && p.active && !(p.until && p.until < ctx.irkToday())) return say(promoText(p));
+        if (p && p.active && !(p.until && p.until < ctx.irkToday())) {
+          const pf = path.join(__dirname, 'assets', 'promo-' + slug + '.jpg'); // своя картинка к промокоду: assets/promo-<метка>.jpg
+          if (ch === 'telegram' && fs.existsSync(pf)) return sendPhotoFile(u.chatId, pf, promoText(p), kb, 'promo.jpg');
+          return say(promoText(p));
+        }
         return say('К сожалению, этот промокод уже не действует.' + (SITE ? '\nАктуальные предложения: ' + SITE : ''));
       }
       const o = key && Object.values(ctx.orders()).find(x => x.notify && x.notify.token === key && x.notify.channel === ch);
