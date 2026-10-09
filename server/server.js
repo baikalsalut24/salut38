@@ -264,12 +264,38 @@ function recalcOrder(o) {
 }
 const histAdd = (o, by, note) => (o.history = o.history || []).push({ at: new Date().toISOString(), by, role: 'system', from: o.status, to: o.status, note });
 function chatOf(o) { const n = o.notify; return n && n.channel === 'telegram' && n.linked && n.chatId ? String(n.chatId) : '' }
-function sendOffer(o, c, remind) { // клиенту в Telegram: что закончилось, чем предлагаем заменить, две кнопки
-  const of = c.offer; if (!of) return false; const chat = chatOf(o); if (!chat || !BOT) { c.noChat = true; return false }
-  const diff = (of.price - c.price) * c.qty;
-  const text = (remind ? '⏰ Напоминаем: нужно решить с заменой по заказу № ' + o.id + '.\n\n' : '') + 'К сожалению, «' + c.name + '» закончился (заказ № ' + o.id + ').\n\nПредлагаем замену:\n«' + of.name + '» — ' + money(of.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\nБыло: ' + money(c.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\n' + (diff === 0 ? 'Сумма заказа не изменится.' : diff > 0 ? 'Сумма заказа увеличится на ' + money(diff) + '.' : 'Сумма заказа уменьшится на ' + money(-diff) + '.') + '\n\nУтвердить замену, подобрать другую или выбрать товар самостоятельно?';
-  BOT.send('telegram', chat, text, imgUrl(of.img), { inline_keyboard: [[{ text: '✅ Утвердить замену', callback_data: 'so:' + o.id + ':' + c.id }], [{ text: '🔄 Следующая автозамена', callback_data: 'sn:' + o.id + ':' + c.id }], [{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + o.id + ':' + c.id }]] });
+const SUBST_KB = (o, c) => { const id = o.id + ':' + c.id, del = [{ text: '✖ Удалить из заказа', callback_data: 'sd:' + id }];
+  return { inline_keyboard: c.autoOff ? [[{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + id }], del]
+    : [[{ text: '✅ Утвердить замену', callback_data: 'so:' + id }], [{ text: '🔄 Следующая автозамена', callback_data: 'sn:' + id }], [{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + id }], del] } };
+function sendOffer(o, c, remind) { // клиенту в Telegram: что закончилось и чем предлагаем заменить; после 4 нажатий «следующая автозамена» остаются только «выбрать самостоятельно» и «удалить»
+  const of = c.offer; if (!of && !c.autoOff) return false; const chat = chatOf(o); if (!chat || !BOT) { c.noChat = true; return false }
+  const pre = remind ? '⏰ Напоминаем: нужно решить с заменой по заказу № ' + o.id + '.\n\n' : '';
+  let text, photo = '';
+  if (of) { const diff = (of.price - c.price) * c.qty; photo = imgUrl(of.img);
+    text = pre + 'К сожалению, «' + c.name + '» закончился (заказ № ' + o.id + ').\n\nПредлагаем замену:\n«' + of.name + '» — ' + money(of.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\nБыло: ' + money(c.price) + (c.qty > 1 ? ' × ' + c.qty : '') + '\n' + (diff === 0 ? 'Сумма заказа не изменится.' : diff > 0 ? 'Сумма заказа увеличится на ' + money(diff) + '.' : 'Сумма заказа уменьшится на ' + money(-diff) + '.') + '\n\nУтвердить замену, подобрать другую или выбрать товар самостоятельно?' }
+  else text = pre + 'К сожалению, «' + c.name + '» закончился (заказ № ' + o.id + '), а автоматический подбор замены завершён.\n\nВыберите товар самостоятельно из каталога или удалите позицию из заказа.';
+  BOT.send('telegram', chat, text, photo, SUBST_KB(o, c));
   c.sentAt = new Date().toISOString(); c.noChat = false; if (!remind) { c.rem = 0; c.remAt = ''; c.cold = false } return true;
+}
+const supNeed = (c, kind) => { c.sup = { kind, at: new Date().toISOString() }; c.supDone = false }; // вручную передаём заказы поставщику — нужно сообщить ему об изменении
+const catOf = sku => { const b = BASE.find(x => x.sku === sku); return b ? (b.cats || []).filter(x => x !== 'Хит продаж') : [] };
+function selfList(o, c, page) { // весь список товаров из категории закончившегося
+  const cs = catOf(c.sku), inO = o.items.map(i => i.sku);
+  const l = BASE.filter(b => b.sku !== c.sku && !inO.includes(b.sku) && visibleNow(b) && (b.cats || []).some(x => cs.includes(x))).map(b => ({ b, pr: priceOf(b.sku, b.price) })).filter(x => x.pr > 0).sort((x, y) => Math.abs(x.pr - c.price) - Math.abs(y.pr - c.price));
+  const N = 8, pages = Math.max(1, Math.ceil(l.length / N)); page = Math.max(0, Math.min(pages - 1, +page || 0));
+  const rows = l.slice(page * N, page * N + N).map(x => [{ text: (x.b.name.length > 34 ? x.b.name.slice(0, 33) + '…' : x.b.name) + ' — ' + money(x.pr), callback_data: 'sc:' + o.id + ':' + c.id + ':' + x.b.sku }]);
+  const nav = []; if (page > 0) nav.push({ text: '◀ Назад', callback_data: 'sp:' + o.id + ':' + c.id + ':' + (page - 1) }); if (page < pages - 1) nav.push({ text: 'Дальше ▶', callback_data: 'sp:' + o.id + ':' + c.id + ':' + (page + 1) });
+  if (nav.length) rows.push(nav); rows.push([{ text: '✖ Удалить из заказа', callback_data: 'sd:' + o.id + ':' + c.id }]);
+  return { text: l.length ? 'Выберите замену для «' + c.name + '» (' + (cs[0] || 'каталог') + '), по близости к цене. Страница ' + (page + 1) + ' из ' + pages + ':' : 'В этой категории сейчас нет подходящих товаров. Можно удалить позицию из заказа — или напишите нам, оператор поможет.', kb: { inline_keyboard: rows }, list: true };
+}
+function removeItem(o, c, by) {
+  if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Позиция уже обработана' };
+  const i = o.items.findIndex(x => x.sku === c.sku); if (i < 0) return { error: 'Позиции уже нет в заказе' };
+  o.items.splice(i, 1); recalcOrder(o); c.st = 'removed'; c.by = by; c.doneAt = new Date().toISOString(); supNeed(c, 'remove');
+  histAdd(o, by, 'Позиция «' + c.name + '» удалена из заказа (' + by + '). Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString(); persist();
+  notifyOrder(o, 'Заказ № ' + o.id + ': позиция «' + c.name + '» удалена. Сумма заказа: ' + money(o.total) + '.');
+  alertText('✖ Заказ № ' + o.id + ': «' + c.name + '» удалена из заказа (' + by + '). ' + (o.items.length ? 'Сумма: ' + money(o.total) + '. ' : 'В заказе не осталось позиций! ') + 'Уведомите поставщика.');
+  return { ok: true };
 }
 function startOos(o, sku, by) {
   const it = o.items.find(i => i.sku === sku); if (!it) return { error: 'Нет такой позиции' };
@@ -280,7 +306,7 @@ function startOos(o, sku, by) {
   o.subst.push(c);
   const off = suggestFor(sku, [...o.items.map(i => i.sku)]);
   if (off) { c.offer = off; c.tried.push(off.sku); histAdd(o, by, 'Закончился: ' + it.name + '. Предложена замена: ' + off.name); sendOffer(o, c) }
-  else { c.st = 'manual'; histAdd(o, by, 'Закончился: ' + it.name + '. Подходящей замены автоматически не нашлось') }
+  else { c.autoOff = true; histAdd(o, by, 'Закончился: ' + it.name + '. Подходящей замены автоматически не нашлось'); if (!sendOffer(o, c)) c.st = 'manual' }
   o.updatedAt = new Date().toISOString(); persist();
   alertText('📦 В заказе № ' + o.id + ' закончился товар «' + it.name + '». ' + (c.offer ? (c.noChat ? 'Клиент не в Telegram — предложите замену «' + c.offer.name + '» по телефону: ' + o.phone : 'Клиенту отправлена замена «' + c.offer.name + '», ждём ответ.') : 'Автозамены нет — свяжитесь с клиентом: ' + o.phone));
   return { ok: true };
@@ -289,7 +315,7 @@ function acceptSubst(o, c, by) {
   if (!c || c.st !== 'wait' || !c.offer) return { error: 'Замена уже обработана' };
   const i = o.items.findIndex(x => x.sku === c.sku); if (i < 0) return { error: 'Позиции уже нет в заказе' };
   const of = c.offer; o.items[i] = { sku: of.sku, name: of.name, qty: c.qty, price: of.price, sum: Math.round(of.price * c.qty * 100) / 100, picked: false };
-  recalcOrder(o); c.st = 'ok'; c.final = of; c.by = by; c.doneAt = new Date().toISOString();
+  recalcOrder(o); c.st = 'ok'; c.final = of; c.by = by; c.doneAt = new Date().toISOString(); c.self = false; supNeed(c, 'replace');
   histAdd(o, by, 'Замена утверждена (' + by + '): ' + c.name + ' → ' + of.name + '. Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString(); persist();
   notifyOrder(o, 'Заказ № ' + o.id + ': замена утверждена — «' + of.name + '». Сумма заказа: ' + money(o.total) + '.');
   alertText('✅ Заказ № ' + o.id + ': замена «' + c.name + '» → «' + of.name + '» утверждена (' + by + '). Сумма: ' + money(o.total));
@@ -297,21 +323,23 @@ function acceptSubst(o, c, by) {
 }
 function nextSubst(o, c, by, sku) {
   if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Замена уже обработана' };
-  let off = null;
+  const cl = by === 'клиент'; let off = null;
   if (sku) { const b = BASE.find(x => x.sku === sku); if (!b) return { error: 'Товар не найден' }; if (!visibleNow(b)) return { error: 'Этот товар сейчас скрыт или закончился' }; off = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' } }
-  else if (c.tried.length < 4) off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried]);
-  if (!off) { c.st = 'manual'; c.offer = null; histAdd(o, by, 'Подходящих замен для «' + c.name + '» больше нет — нужна связь с клиентом'); o.updatedAt = new Date().toISOString(); persist();
-    if (by === 'клиент') { notifyOrder(o, 'Заказ № ' + o.id + ': подходящих замен больше не нашли. Оператор свяжется с вами по телефону ' + o.phone + '.'); alertText('⚠️ Заказ № ' + o.id + ': клиент отказался от замены «' + c.name + '», вариантов больше нет. Позвоните: ' + o.phone) } return { ok: true } }
-  c.offer = off; c.st = 'wait'; c.self = false; c.tried.push(off.sku); histAdd(o, by, 'Другая замена для «' + c.name + '»: ' + off.name); o.updatedAt = new Date().toISOString();
+  else if (cl) { c.nexts = (c.nexts || 0) + 1; if (c.nexts < 4) off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried]) }
+  else off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried]);
+  if (!off) {
+    if (cl) { c.autoOff = true; c.offer = null; c.st = 'wait'; histAdd(o, by, 'Автозамены для «' + c.name + '» закончились — клиенту остался самостоятельный выбор или удаление'); o.updatedAt = new Date().toISOString(); sendOffer(o, c); persist(); alertText('🔄 Заказ № ' + o.id + ': клиент перебрал автозамены для «' + c.name + '». Он выбирает сам или удалит позицию.'); return { ok: true } }
+    c.st = 'manual'; c.offer = null; histAdd(o, by, 'Подходящих замен для «' + c.name + '» больше нет — нужна связь с клиентом'); o.updatedAt = new Date().toISOString(); persist(); return { ok: true } }
+  c.offer = off; c.st = 'wait'; c.self = false; c.autoOff = false; c.tried.push(off.sku); histAdd(o, by, 'Другая замена для «' + c.name + '»: ' + off.name); o.updatedAt = new Date().toISOString();
   const sent = sendOffer(o, c); persist();
-  if (by === 'клиент') alertText('🔄 Заказ № ' + o.id + ': клиент просит другую замену для «' + c.name + '». Предложено: «' + off.name + '».');
+  if (cl) alertText('🔄 Заказ № ' + o.id + ': клиент просит другую замену для «' + c.name + '». Предложено: «' + off.name + '».');
   return { ok: true, sent };
 }
 const irkHour = () => new Date(Date.now() + 8 * 3600e3).getUTCHours();
 function remindSubst() { // раз в 60 минут с 9:00 до 21:00 по Иркутску, максимум 3 напоминания
   const h = irkHour(); if (h < 9 || h >= 21) return; let ch = false;
   for (const o of Object.values(orders)) for (const c of o.subst || []) {
-    if (c.st !== 'wait' || c.self || c.cold || c.noChat || !c.offer || !chatOf(o)) continue;
+    if (c.st !== 'wait' || c.cold || c.noChat || !(c.offer || c.autoOff) || !chatOf(o)) continue;
     const last = Date.parse(c.remAt || c.sentAt || c.at); if (!(Date.now() - last >= 3600e3)) continue;
     if ((c.rem || 0) >= 3) { c.cold = true; c.coldAt = new Date().toISOString(); histAdd(o, 'система', 'Клиент не ответил на 3 напоминания о замене «' + c.name + '». Нужен звонок оператора'); o.updatedAt = c.coldAt; ch = true;
       alertText('🥶 Заказ № ' + o.id + ': клиент не ответил на замену «' + c.name + '» после 3 напоминаний. Позвоните: ' + o.phone); continue }
@@ -319,11 +347,18 @@ function remindSubst() { // раз в 60 минут с 9:00 до 21:00 по Ир
   }
   if (ch) persist() }
 setInterval(remindSubst, 5 * 60e3).unref();
-function substAnswer(act, orderId, caseId, chat) { // нажатие кнопок клиента в боте
+function substAnswer(act, orderId, caseId, chat, arg) { // нажатия кнопок клиента в боте
   const o = orders[orderId], c = o && (o.subst || []).find(x => x.id === caseId); if (!c || chatOf(o) !== String(chat)) return 'Это предложение уже недоступно.';
   if (c.st !== 'wait') return 'Это предложение уже обработано.';
-  if (act === 'self') { c.self = true; c.selfAt = new Date().toISOString(); c.cold = false; histAdd(o, 'клиент', 'Клиент хочет выбрать замену для «' + c.name + '» самостоятельно'); o.updatedAt = new Date().toISOString(); persist();
-    alertText('🔍 Заказ № ' + o.id + ': клиент хочет сам выбрать замену для «' + c.name + '». Свяжитесь с ним: ' + o.phone); return { text: 'Хорошо! Напишите сюда название или артикул товара, который хотите вместо «' + c.name + '», либо выберите его на сайте ' + (process.env.SHOP_URL || 'https://salut38.shop') + ' и сообщите нам. Оператор подтвердит замену.' } }
+  if (act === 'self' || act === 'list') { if (!c.self) { c.self = true; histAdd(o, 'клиент', 'Клиент выбирает замену для «' + c.name + '» самостоятельно'); persist() } return selfList(o, c, act === 'list' ? arg : 0) }
+  if (act === 'pick') { const b = BASE.find(x => x.sku === arg); if (!b || !visibleNow(b)) return 'Этот товар недоступен, выберите другой.'; const pr = priceOf(b.sku, b.price), diff = (pr - c.price) * c.qty;
+    return { text: 'Заменить «' + c.name + '» на «' + b.name + '» — ' + money(pr) + (c.qty > 1 ? ' × ' + c.qty : '') + '?\n' + (diff === 0 ? 'Сумма заказа не изменится.' : diff > 0 ? 'Сумма заказа увеличится на ' + money(diff) + '.' : 'Сумма заказа уменьшится на ' + money(-diff) + '.'), photo: imgUrl(FEED.im[b.sku] || b.img),
+      kb: { inline_keyboard: [[{ text: '✅ Да, заменить', callback_data: 'sy:' + o.id + ':' + c.id + ':' + b.sku }], [{ text: '↩ К списку', callback_data: 'sp:' + o.id + ':' + c.id + ':0' }]] } } }
+  if (act === 'yes') { const b = BASE.find(x => x.sku === arg); if (!b || !visibleNow(b)) return 'Этот товар недоступен, выберите другой.';
+    c.offer = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' }; if (!c.tried.includes(b.sku)) c.tried.push(b.sku); c.chosen = true;
+    const r = acceptSubst(o, c, 'клиент'); return r.error ? r.error : ''; }
+  if (act === 'del') return { text: 'Удалить «' + c.name + '» из заказа № ' + o.id + '?', kb: { inline_keyboard: [[{ text: '✖ Да, удалить', callback_data: 'sz:' + o.id + ':' + c.id }], [{ text: '↩ Нет, вернуться', callback_data: 'sp:' + o.id + ':' + c.id + ':0' }]] } };
+  if (act === 'delyes') { const r = removeItem(o, c, 'клиент'); return r.error ? r.error : ''; }
   const r = act === 'ok' ? acceptSubst(o, c, 'клиент') : nextSubst(o, c, 'клиент'); return r.error ? r.error : '';
 }
 const digits = s => String(s || '').replace(/\D/g, '').replace(/^8(?=\d{10}$)/, '7');
@@ -453,7 +488,9 @@ async function api(req, res, url) {
       let r;
       if (b.action === 'accept') r = acceptSubst(o, c, me.name);
       else if (b.action === 'next') r = nextSubst(o, c, me.name, b.sku ? clean(b.sku, 40) : '');
-      else if (b.action === 'done' || b.action === 'cancel') { if (c.st === 'ok' || c.st === 'done' || c.st === 'cancel') return send(res, 400, { error: 'Уже обработано' }); c.st = b.action === 'done' ? 'done' : 'cancel'; histAdd(o, me.name, (b.action === 'done' ? 'Замена решена вручную: ' : 'Замена отменена: ') + c.name); o.updatedAt = new Date().toISOString(); persist(); r = { ok: true } }
+      else if (b.action === 'done' || b.action === 'cancel') { if (c.st === 'ok' || c.st === 'done' || c.st === 'cancel') return send(res, 400, { error: 'Уже обработано' }); c.st = b.action === 'done' ? 'done' : 'cancel'; if (c.st === 'done') supNeed(c, 'manual'); histAdd(o, me.name, (b.action === 'done' ? 'Замена решена вручную: ' : 'Замена отменена: ') + c.name); o.updatedAt = new Date().toISOString(); persist(); r = { ok: true } }
+      else if (b.action === 'remove') r = removeItem(o, c, me.name);
+      else if (b.action === 'supplier') { if (!c.sup || c.supDone) return send(res, 400, { error: 'Уведомлять не нужно' }); c.supDone = true; c.supAt = new Date().toISOString(); c.supBy = me.name; histAdd(o, me.name, 'Поставщик уведомлён об изменении: ' + c.name); o.updatedAt = c.supAt; persist(); r = { ok: true } }
       else return send(res, 400, { error: 'Неизвестное действие' });
       return r.error ? send(res, 400, r) : send(res, 200, view(o, role));
     }
@@ -673,3 +710,5 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
   };
   SUBS = require('./subs')({ DATA, alert: alertText, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
   BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), orders: () => orders, persist, statusText, irkToday, substAnswer }); BOT.start() });
+
+if (process.env.BS_TEST) module.exports = { orders, BASE, startOos, substAnswer, remindSubst, setBot: b => { BOT = b }, cat };

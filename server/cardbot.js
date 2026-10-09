@@ -109,10 +109,13 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     jpost(TG_API + '/bot' + TG + '/answerCallbackQuery', { callback_query_id: q.id });
     if (ctx.subs) ctx.subs.touch(q.from && q.from.id || chat, { name: q.from && q.from.first_name }, TG);
     const d = q.data;
-    if (/^(so|sn|sf):/.test(d) && ctx.substAnswer) { // ответ клиента на замену товара: so — утвердить, sn — следующая автозамена, sf — выбрать самому
-      const [k, oid, cid] = d.split(':'), err = ctx.substAnswer(k === 'so' ? 'ok' : k === 'sf' ? 'self' : 'next', oid, cid, chat);
-      if (q.message && q.message.message_id) jpost(TG_API + '/bot' + TG + '/editMessageReplyMarkup', { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
-      return err ? send('telegram', chat, typeof err === 'string' ? err : err.text) : undefined;
+    if (/^s[onfpcydz]:/.test(d) && ctx.substAnswer) { // замена товара: so утвердить, sn следующая, sf/sp список, sc выбор, sy подтвердить, sd/sz удаление
+      const [k, oid, cid, arg] = d.split(':'), act = { so: 'ok', sn: 'next', sf: 'self', sp: 'list', sc: 'pick', sy: 'yes', sd: 'del', sz: 'delyes' }[k];
+      const res = ctx.substAnswer(act, oid, cid, chat, arg), mid = q.message && q.message.message_id, ed = (m, b) => mid && jpost(TG_API + '/bot' + TG + '/' + m, { chat_id: chat, message_id: mid, ...b });
+      if (res && typeof res === 'object' && res.list && q.message.text !== undefined && !q.message.photo) return ed('editMessageText', { text: res.text, reply_markup: res.kb });
+      if (mid) ed('editMessageReplyMarkup', { reply_markup: { inline_keyboard: [] } });
+      if (!res) return;
+      return typeof res === 'string' ? send('telegram', chat, res) : send('telegram', chat, res.text, res.photo || '', res.kb);
     }
     if (d === 'disc') return sendPhotoFile(chat, DISC_IMG, DISC_TXT, IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP]]));
     if (d === 'pay') return send('telegram', chat, PAY_TXT, '', IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP], [URLB('обратиться в поддержку', SUPPORT)]]));
