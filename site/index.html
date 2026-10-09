@@ -228,6 +228,7 @@ section.cat{padding:34px 0 60px;background:#0E1524}
 .line .q button{width:30px;height:30px;border-radius:8px;background:var(--panel2);font-weight:900}
 .d-foot{padding:16px 18px;border-top:1px solid var(--line);display:grid;gap:10px}
 .sum{display:flex;justify-content:space-between;font-weight:900;font-size:20px}
+.cfm{display:contents}
 .f{background:var(--panel2);border:1px solid var(--line);color:#fff;border-radius:12px;padding:13px 14px;font-size:16px;width:100%}
 .done{padding:18px;text-align:center}
 .done pre{text-align:left;white-space:pre-wrap;background:var(--panel2);border-radius:12px;padding:14px;font-size:13px;font-family:inherit;margin:14px 0}
@@ -954,15 +955,17 @@ function renderCart(){
   $('cartBody').innerHTML=secHtml('items','Товары','',lines,OPEN.items);
   const promoBody=`<div class="promo"><div class="promo-row"><input class="f" id="fpromo" placeholder="Промокод или номер дисконтной карты" autocomplete="off" autocapitalize="characters" value="${esc(PROMO)}"><button type="button" id="promoApply" class="${PROMO_OK?'ok':''}">${PROMO_OK?'Принят ✓':'Применить'}</button></div>${PROMO_MSG?'<div class="promo-err">'+esc(PROMO_MSG)+'</div>':''}</div>`;
   $('cartFoot').innerHTML=secHtml('promo','Промокод','',promoBody,OPEN.promo)+secHtml('totals','Итого','',`${info?`<div class="sum"><span>Итого</span><span>${ruble(tt)}</span></div><div class="sum dsum" style="color:#1F9D55"><span>Скидка по промокоду</span><span>−${ruble(dsc)} (${dpc}%)</span></div><div class="sum"><span>К оплате</span><span>${ruble(pay)}</span></div>`:`<div class="sum"><span>Итого</span><span>${ruble(tt)}</span></div>`}`,OPEN.totals)+
-    secHtml('contacts','Контакты','',`<input class="f" id="fn" placeholder="Ваше имя" autocomplete="name"><input class="f" id="fp" type="tel" placeholder="Телефон" autocomplete="tel">`,OPEN.contacts)+
+    secHtml('contacts','Контакты','',`<form class="cfm" autocomplete="on" onsubmit="return false"><input class="f" id="fn" name="name" placeholder="Ваше имя" autocomplete="name" autocapitalize="words"><input class="f" id="fp" name="tel" type="tel" inputmode="tel" placeholder="Телефон" autocomplete="tel"></form>`,OPEN.contacts)+
     (STEP===2?secHtml('delivery','Доставка','',addrBlock(),OPEN.delivery):'')+`
     <label class="cons" id="consLbl"><input type="checkbox" id="fconsent" ${CONSENT?'checked':''}><span>Я даю <button type="button" class="lnk" data-consent="1">согласие на обработку персональных данных</button></span></label><div class="promo-err" id="consErr" hidden>Подтвердите согласие, чтобы продолжить</div>
     <button class="cta" id="order" style="max-width:none;font-size:18px;padding:16px">${STEP===2?'Оформить заказ':'Далее'}</button><div class="cons-note">Оформляя заказ, вы принимаете <button type="button" data-doc="offer">публичную оферту</button> и <button type="button" data-doc="policy">политику обработки персональных данных</button>.</div>`;
   Object.keys(keep).forEach(i=>{const e=$(i);if(e&&i!=='fi'&&i!=='fd')e.value=keep[i]});if(keep.fd)setDateVal(keep.fd);fillIv(keep.fi);refreshSums();
+  try{const c=JSON.parse(localStorage.getItem('bs_c')||'null');if(c){if(!$('fn').value&&c.n)$('fn').value=c.n;if(!$('fp').value&&c.p)$('fp').value=c.p}}catch(e){}
   if(STEP===2)queueCart(keep.fn||'',keep.fp||'');
 }
 async function submitOrder(){
   const name=$('fn').value.trim(),phone=$('fp').value.trim(),promo=($('fpromo')?$('fpromo').value:PROMO).trim();
+  if(name&&phone){try{localStorage.setItem('bs_c',JSON.stringify({n:name,p:phone}))}catch(e){}}
   if(promo&&(!PROMO_OK||normP(PROMO)!==normP(promo))){await applyPromo(promo);return}
   if(!name||!phone){setSec('contacts',true);const f=$(name?'fp':'fn');f.focus();f.classList.add('bad');return}
   if(!CONSENT){const l=$('consLbl');l.classList.add('bad');$('consErr').hidden=false;l.scrollIntoView({block:'center',behavior:'smooth'});return}

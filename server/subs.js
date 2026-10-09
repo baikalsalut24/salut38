@@ -68,7 +68,7 @@ module.exports = function init(ctx) { // ctx: DATA, orders(), ownerOf(order), te
       else if (!seen.has(id)) merged++;
       seen.add(id);
       if (a && a < s.first) s.first = a; if (b && b > s.last) s.last = b; if (name && !s.name) s.name = String(name).slice(0, 60);
-      for (const t of tags) if (!s.tags.includes(t)) s.tags.push(t);
+      // метки из BotHelp больше не переносим (решение владельца)
       if (iU >= 0 && r[iU] && !s.u) s.u = String(r[iU]).slice(0, 40);
       s.h = s.last >= HINT_FROM ? 1 : 0; // подсказка «похож на живого»
     }
@@ -216,6 +216,10 @@ module.exports = function init(ctx) { // ctx: DATA, orders(), ownerOf(order), te
       const r = await sendTo(id, { text, nofooter: true });
       if (!r.ok) { if (r.error_code === 403) setSt(id, 'blocked', TOKEN); return send(res, 400, { error: r.error_code === 403 ? 'Человек заблокировал бота — ответить нельзя' : 'Не отправилось: ' + (r.description || 'ошибка Telegram') }) }
       inAdd(id, '', text, 'out', me.name); return send(res, 200, { ok: true });
+    }
+    if (p === '/api/subs/clear-tags' && m === 'POST') {
+      try { fs.copyFileSync(F.subs, F.subs.replace('.json', '.before-tags.json')) } catch {}
+      let n = 0; for (const s of Object.values(subs)) if (s.tags && s.tags.length) { s.tags = []; n++ } saveSubs(); return send(res, 200, { ok: true, cleared: n });
     }
     if (p === '/api/subs/import' && m === 'POST') { const b = await J(8e6); if (!b || !b.csv) return send(res, 400, { error: 'Нет файла' }); const r = importCsv(b.csv); return send(res, r.error ? 400 : 200, r) }
     if (p === '/api/subs/check' && m === 'POST') { const b = await J() || {}; return send(res, 200, await check(!!b.force)) }

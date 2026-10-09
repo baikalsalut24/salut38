@@ -409,7 +409,7 @@ function subsHead(){const d=subsD;if(!d)return'<div class="empty">Загрузк
   <div class="mt">Не проверены: ${s.new||0} · не писали этому боту: ${s.dead||0} · заблокировали: ${s.blocked||0} · отписались: ${s.unsub||0}</div>
   <div class="mt">Покупали: ${d.buyers} · на паузе (заказ за ${d.cool} дн.): ${d.cooling} · готовы к рассылке: <b>${d.ready}</b></div>
   ${j.total?`<div class="mt">${j.running?'⏳ Проверка: '+j.done+' из '+j.total:'Последняя проверка: '+esc(j.msg||'')+' — живых '+j.live+', не писали '+j.dead+', заблокировали '+j.blocked}</div>`:''}
-  <div class="bt"><button id="s_imp">Загрузить из BotHelp</button><button id="s_chk">${s.new?'Проверить живых ('+s.new+')':'Проверить всех заново'}</button><button id="s_new" style="background:var(--y);color:#111">Новая рассылка</button></div><input type="file" id="s_file" accept=".csv,text/csv,text/plain" hidden></div>`}
+  <div class="bt"><button id="s_imp">Загрузить из BotHelp</button><button id="s_chk">${s.new?'Проверить живых ('+s.new+')':'Проверить всех заново'}</button><button id="s_new" style="background:var(--y);color:#111">Новая рассылка</button><button id="s_clr">Удалить все метки</button></div><input type="file" id="s_file" accept=".csv,text/csv,text/plain" hidden></div>`}
 function subsBc(){const l=bcD&&bcD.list||[];if(!l.length)return'';
   return '<div class="ph" style="margin:14px 2px 8px;font-size:15px">Рассылки</div>'+l.slice(0,8).map(b=>{const n=b.n||{},done=(n.sent||0)+(n.blocked||0)+(n.dead||0)+(n.failed||0);
     return `<div class="pc"><div class="r1"><span class="cd" style="font-size:14px;letter-spacing:0">${dmy(b.at)}</span><span class="pill ${BST[b.st][1]}">${BST[b.st][0]}</span></div>
@@ -429,6 +429,7 @@ function drawSubs(){const mn=$('#mn');
         if(id==='s_imp')$('#s_file').click();
         else if(id==='s_chk'){const r=await api('/api/subs/check',{method:'POST',body:{force:!(subsD.st.new>0)}});toast(r.msg||'Проверка запущена',false,true);loadSubs()}
         else if(id==='s_new')bcForm();
+        else if(id==='s_clr'){if(confirm('Удалить все метки у всех подписчиков? Резервная копия базы сохранится на сервере.')){const r=await api('/api/subs/clear-tags',{method:'POST',body:{}});toast('Метки удалены у '+r.cleared+' подписчиков',false,true);loadSubs()}}
         else if(id==='s_more'){sf.off+=100;const keep=subsD.rows;const p=new URLSearchParams();for(const k in sf)if(sf[k])p.set(k,sf[k]);const d=await api('/api/subs?'+p);d.rows=keep.concat(d.rows);subsD=d;sf.off=d.rows.length-100;drawSubs()}
         else if(bc){await api('/api/broadcasts',{method:'PATCH',body:{id:bc.dataset.id,action:bc.dataset.bc}});loadSubs()}
       }catch(er){toast(er.error||'Ошибка',true)}};
