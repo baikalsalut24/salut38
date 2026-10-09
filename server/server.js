@@ -237,15 +237,20 @@ function sweepOos() { let n = 0; for (const k in cat) { const o = cat[k]; if (o.
 setInterval(sweepOos, 3600e3).unref(); sweepOos();
 const shotsOf = sku => { const g = gpData()[sku], r = g && (g.p || []).find(x => /выстрел/i.test(x[0])); return r ? (+String(r[1]).replace(/\D/g, '') || 0) : 0 };
 const visibleNow = b => !hiddenNow(b.sku) && !FEED.hd.includes(b.sku);
-function suggestFor(sku, exclude) { // подбор замены: та же категория, близкая цена, число выстрелов и производитель
+const PM_NUM = /выстрел|калибр|высот|длительн|время|эффект|мощност|залп|диаметр/i; // числовые характеристики для сравнения
+const numsOf = sku => { const g = gpData()[sku], o = {}; for (const r of (g && g.p) || []) { if (!PM_NUM.test(r[0])) continue; const v = parseFloat(String(r[1]).replace(',', '.').replace(/[^\d.:]/g, '').replace(/^(\d+):(\d+)$/, (m, x, y) => +x * 60 + +y)); if (v > 0) o[String(r[0]).toLowerCase().trim()] = v } return o };
+function suggestFor(sku, exclude) { // замена: та же категория, близкие характеристики (выстрелы, калибр, высота, время), ближайшая цена; бренд — любой, свой чуть предпочтительнее
   const base = BASE.find(b => b.sku === sku); if (!base) return null;
-  const p0 = priceOf(sku, base.price) || 1, sh0 = shotsOf(sku); let best = null, bs = -1e9;
+  const p0 = priceOf(sku, base.price) || 1, n0 = numsOf(sku), c0 = base.cats || []; let best = null, bs = -1e9;
   for (const b of BASE) {
     if (b.sku === sku || exclude.includes(b.sku) || !visibleNow(b)) continue;
     const pr = priceOf(b.sku, b.price); if (!(pr > 0) || pr < p0 * 0.5 || pr > p0 * 1.6) continue;
-    let sc = 0; if ((b.cats || []).some(c => (base.cats || []).includes(c))) sc += 25; if (b.brand && b.brand === base.brand) sc += 10;
-    const d = (pr - p0) / p0; sc -= Math.abs(d) * 60 + (d > 0 ? d * 30 : 0);
-    const sh = shotsOf(b.sku); if (sh0 && sh) sc -= Math.abs(sh - sh0) / Math.max(sh, sh0) * 30;
+    const shared = (b.cats || []).filter(c => c0.includes(c)).length; if (!shared) continue; // только своя категория
+    let sc = 20 + shared * 5; if (b.brand && b.brand === base.brand) sc += 6;
+    const d = (pr - p0) / p0; sc -= Math.abs(d) * 70 + (d > 0 ? d * 30 : 0);
+    const n1 = numsOf(b.sku); let cnt = 0, diff = 0;
+    for (const k in n0) if (n1[k]) { cnt++; diff += Math.abs(n1[k] - n0[k]) / Math.max(n1[k], n0[k]) }
+    if (cnt) sc -= diff / cnt * 45; else if (Object.keys(n0).length) sc -= 10;
     if (sc > bs) { bs = sc; best = b }
   }
   return best ? { sku: best.sku, name: best.name, price: priceOf(best.sku, best.price), img: FEED.im[best.sku] || best.img || '' } : null;
