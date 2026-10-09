@@ -139,6 +139,17 @@ for (const v of [5, 10, 15, 20, 25, 30]) { // старые промокоды и
   if (!p) { promos.push({ code: 'САЛЮТ15', kind: 'promo', type: 'percent', value: 15, until: '', note: 'Скидка 15% (ссылка из окна на сайте)', active: true, createdAt: new Date().toISOString(), by: 'система', slug: 'salut15' }); save(F.promos, promos) }
   else if (!p.slug && !promos.some(x => x.slug === 'salut15')) { p.slug = 'salut15'; save(F.promos, promos) }
 }
+{ // однократный перенос промокодов из InSales (все — многоразовые, скидка в % от суммы заказа); повторно не создаются, даже если их удалят
+  const MARK = path.join(DATA, '.insales-promos-done');
+  if (!fs.existsSync(MARK)) {
+    const L = [['ЖЕМЧУЖИНА', 15, '', false, 'InSales: только категории «Салюты от 1.500 до 3.000 р.», «Салюты до 1.500 р.», «Батареи салютов» — здесь ограничения по категориям нет, поэтому код выключен'],
+      ['ИЮНЬ26', 15, '', true, ''], ['ВЕСНА26', 15, '2026-05-31', true, ''], ['2ГИС', 15, '', true, ''], ['САЛЮТ1025', 10, '', true, ''], ['6С', 15, '', true, ''],
+      ['НГ25', 16, '', true, ''], ['КОНЬ', 16, '', true, ''], ['САЛЮТ2415', 15, '', true, ''], ['111125', 20, '2025-11-30', true, 'Чёрная пятница'], ['SALE15', 15, '', true, ''], ['ЯНДЕКС', 15, '', true, '']];
+    for (const [code, v, until, on, note] of L) if (!promos.some(x => x.code === code || (x.aliases || []).includes(code)))
+      promos.push({ code, kind: 'promo', type: 'percent', value: v, until, note: 'Из InSales' + (note ? ': ' + note : ''), active: on, createdAt: new Date().toISOString(), by: 'система' });
+    save(F.promos, promos); try { fs.writeFileSync(MARK, new Date().toISOString()) } catch {}
+  }
+}
 const promoState = p => !p.active ? 'paused' : (p.until && p.until < irkToday() ? 'expired' : 'ok');
 const findPromo = code => { const c = normCode(code); return c ? promos.find(p => p.code === c || (p.aliases || []).includes(c)) : null };
 const promoPub = p => { const used = Object.values(orders).filter(o => o.status !== 'cancelled' && [p.code, ...(p.aliases || [])].includes(normCode(o.promo))); return { ...p, state: promoState(p), uses: used.length, sum: used.reduce((s, o) => s + o.total, 0), disc: used.reduce((s, o) => s + (o.discount || 0), 0) } };
