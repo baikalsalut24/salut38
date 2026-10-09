@@ -436,6 +436,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 .cal{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px}.cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-weight:900;font-size:16px}.cal-h button{width:40px;height:40px;border-radius:50%;font-size:22px;background:var(--panel);color:var(--text)}.cal-h button:disabled{opacity:.3}.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}.cal-w{font-size:11px;font-weight:800;color:var(--muted);padding:4px 0}.cal-g button{aspect-ratio:1;border-radius:10px;font-weight:800;font-size:15px;background:transparent;color:var(--text)}.cal-g button.ok{background:var(--panel)}.cal-g button.dis{opacity:.28;pointer-events:none}.cal-g button.on{background:#FFD21F;color:#111}.cal-g button.td{box-shadow:inset 0 0 0 2px #FFD21F}.f[readonly]{cursor:pointer}
 .line{grid-template-columns:clamp(120px,42vw,172px) 1fr!important;align-items:start!important;gap:12px}.line .t{width:100%!important;height:auto!important;aspect-ratio:1/1;border-radius:14px!important;position:relative}.line .t.hasv{cursor:pointer}.line .t img{padding:8px}.line .li{display:flex;flex-direction:column;gap:4px;min-width:0}.line .li>b:first-child{font-size:15px;line-height:1.25}.line .li .q{margin-top:6px}.line .li .lt{margin-top:auto;padding-top:8px;font-size:18px;font-weight:900}
 .line .li{position:relative}.line .li>b:first-of-type{padding-right:38px}.rmx{position:absolute;top:-6px;right:-4px;width:36px;height:36px;border-radius:50%;background:#EEF1F8;color:#444;font-size:24px;line-height:34px;text-align:center;padding:0;font-weight:400}.rmx:active{background:#ffd9d6;color:#E5121B}
+#undo{position:fixed;left:12px;right:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:420px;margin:0 auto;z-index:9999;background:#080C16;color:#fff;border-radius:14px;padding:13px 14px;display:flex;align-items:center;gap:12px;font-weight:600;font-size:15px;box-shadow:0 8px 28px rgba(0,0,0,.35);overflow:hidden}#undo span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#undo button{background:#FFD21F;color:#111;border-radius:10px;padding:8px 14px;font-weight:800;font-size:14px;flex:none}#undo i{position:absolute;left:0;bottom:0;height:3px;background:#FFD21F;width:100%;animation:undoBar 5s linear forwards}@keyframes undoBar{to{width:0}}
 /* компактные карточки в выдаче */
 .grid{gap:8px}
 .card{border-radius:14px}
@@ -819,6 +820,11 @@ window.addEventListener('popstate',onHash);window.addEventListener('hashchange',
 const $=id=>document.getElementById(id);
 function total(){return Object.entries(cart).reduce((s,[k,q])=>s+q*BY.get(k).price,0)}
 function count(){return Object.values(cart).reduce((a,b)=>a+b,0)}
+let UNDO=null,UNDO_T=0;
+function undoHide(){clearTimeout(UNDO_T);UNDO=null;const e=document.getElementById('undo');if(e)e.remove()}
+function undoShow(sku,qty,name){undoHide();UNDO={sku,qty};let e=document.createElement('div');e.id='undo';e.setAttribute('role','status');
+  e.innerHTML='<span>Убрано: '+esc(name||'товар')+'</span><button type="button" data-undo="1">Вернуть</button><i></i>';document.body.appendChild(e);UNDO_T=setTimeout(undoHide,5000)}
+function undoDo(){if(!UNDO)return;const u=UNDO;undoHide();cart[u.sku]=(cart[u.sku]||0)+u.qty;sync()}
 function change(sku,d){cart[sku]=(cart[sku]||0)+d;if(cart[sku]<=0)delete cart[sku];sync()}
 function sync(){
   $('cartCount').textContent=count();
@@ -1026,7 +1032,8 @@ document.addEventListener('click',e=>{
   if(t.dataset.ck){try{localStorage.setItem('bs_cookie',t.dataset.ck)}catch(e){}window.COOKIE_CHOICE=t.dataset.ck;const b=document.getElementById('ckb');if(b)b.remove();return}
   if(t.dataset.nt){trackPick(t.dataset.nt);return}
   if(t.dataset.tsec){const s=t.closest('.sec');if(OPEN[t.dataset.tsec]!==undefined)setSec(t.dataset.tsec,!s.classList.contains('open'));else{const o=!s.classList.contains('open');s.classList.toggle('open',o);s.querySelector('.sec-b').hidden=!o;t.setAttribute('aria-expanded',o)}return}
-  if(t.dataset.rm){delete cart[t.dataset.rm];sync();return}
+  if(t.dataset.rm){const k=t.dataset.rm,q=cart[k];delete cart[k];sync();if(q)undoShow(k,q,BY.get(k)&&BY.get(k).name);return}
+  if(t.dataset.undo){undoDo();return}
   if(t.dataset.p)change(t.dataset.p,1);
   else if(t.dataset.m)change(t.dataset.m,-1);
   else if(t.dataset.sub!==undefined)openSub(+t.dataset.sub);
