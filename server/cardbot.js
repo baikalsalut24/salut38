@@ -1,7 +1,7 @@
 'use strict';
 // Бот дисконтных карт и статусов заказов: Telegram и MAX. Без внешних библиотек.
 // Клиент пишет боту /start — получает личную карту (один клиент = одна карта). Номер карты вводится в корзине на сайте.
-// Переменные (/etc/bs.env): TG_TOKEN, TG_BOT | MAX_TOKEN, MAX_BOT | SITE_URL, CARD_IMG
+// Переменные (/etc/bs.env): TG_TOKEN, TG_BOT, SHOP_URL | MAX_TOKEN, MAX_BOT | SITE_URL, CARD_IMG
 const crypto = require('crypto');
 const E = process.env;
 const TG = E.TG_TOKEN || '', TG_API = E.TG_API || 'https://api.telegram.org';
@@ -12,16 +12,18 @@ const fs = require('fs'), path = require('path');
 const SUPPORT = E.SUPPORT_URL || 'https://t.me/baikalsalut', WELCOME_IMG = E.WELCOME_IMG || CARD_IMG;
 const LEGACY = E.LEGACY_MENU !== '0'; // меню как в BotHelp (скидки / оплата, доставка / поддержка). После переезда: LEGACY_MENU=0
 const DISC_IMG = path.join(__dirname, 'assets', 'discounts.png');
-async function sendPhotoFile(chat, file, caption, kb) { // картинка с диска; если не вышло — просто текст
+async function sendPhotoFile(chat, file, caption, kb, fname) { // картинка с диска; если не вышло — просто текст
   try {
-    const fd = new FormData(); fd.append('chat_id', String(chat)); fd.append('caption', caption); if (kb) fd.append('reply_markup', JSON.stringify(kb)); fd.append('photo', new Blob([fs.readFileSync(file)]), 'a.png');
+    const fd = new FormData(); fd.append('chat_id', String(chat)); fd.append('caption', caption); if (kb) fd.append('reply_markup', JSON.stringify(kb)); fd.append('photo', new Blob([fs.readFileSync(file)]), fname || 'a.png');
     const r = await (await fetch(TG_API + '/bot' + TG + '/sendPhoto', { method: 'POST', body: fd })).json(); if (r.ok) return r;
   } catch (e) { console.error('bot photo', e.message) }
   return jpost(TG_API + '/bot' + TG + '/sendMessage', { chat_id: chat, text: caption, ...(kb ? { reply_markup: kb } : {}) });
 }
 const IK = rows => ({ inline_keyboard: rows }), URLB = (t, u) => ({ text: t, url: u });
-const SHOP = SITE ? [URLB('в магазин', SITE)] : [];
-const HOME_KB = IK([[{ text: 'скидки', callback_data: 'disc' }, ...(SITE ? [URLB('выбрать салют', SITE)] : [])], [{ text: 'оплата, доставка', callback_data: 'pay' }], [URLB('обратиться в поддержку', SUPPORT)]]);
+const SHOP_URL = (E.SHOP_URL || SITE).replace(/\/$/, ''), WELCOME_FILE = path.join(__dirname, 'assets', 'welcome.jpg'); // SHOP_URL — куда ведут кнопки «выбрать салют / в магазин» (пока старый сайт)
+const SHOP = SHOP_URL ? [URLB('в магазин', SHOP_URL)] : [];
+const sendWelcome = chat => fs.existsSync(WELCOME_FILE) ? sendPhotoFile(chat, WELCOME_FILE, HOME_TXT, HOME_KB, 'welcome.jpg') : send('telegram', chat, HOME_TXT, WELCOME_IMG, HOME_KB);
+const HOME_KB = IK([[{ text: 'скидки', callback_data: 'disc' }, ...(SHOP_URL ? [URLB('выбрать салют', SHOP_URL)] : [])], [{ text: 'оплата, доставка', callback_data: 'pay' }], [URLB('обратиться в поддержку', SUPPORT)]]);
 const HOME_TXT = '🎁 Байкал Салют поддержка, рады поделиться с вами списком актуальных промокодов на скидки от 5% до 30%.\n\n🧐 Есть вопросы? Напишите нам в телеграм по ссылке: ' + SUPPORT + '\n\n👇 Нажмите кнопку "скидки", чтобы получить список промокодов 👇';
 const DISC_TXT = '👉 Промокоды вводятся после добавления товаров в корзину перед нажатием на кнопку "Оформить заказ".\n🛒 Приятных вам покупок)';
 const PAY_TXT = '🚚 По городу Иркутску бесплатная доставка до ваших дверей.\n👋 Дату и время доставки вы выбираете сами\n💰 Вы оплачиваете заказ только после его получения';
@@ -65,7 +67,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     if (ch === 'telegram' && /^\/stop\b/i.test(text)) { ctx.subs && ctx.subs.setSt(sid, 'unsub', TG); return send(ch, u.chatId, 'Вы отписались от рассылок. Заказы и статусы это не затрагивает. Чтобы вернуться, нажмите /start.') }
     if (ch === 'telegram' && ctx.subs) ctx.subs.touch(sid, { start: !!sm, name: u.name, tag: key === 'card' ? 'бот:карта' : key && key.startsWith('promo_') ? 'бот:' + key : '' }, TG);
     const kb = ch === 'telegram' && !LEGACY ? KB : undefined, say = (x, photo) => send(ch, u.chatId, x, photo, kb);
-    const home = () => ch === 'telegram' && LEGACY ? send(ch, u.chatId, HOME_TXT, WELCOME_IMG, HOME_KB) : say(welcome);
+    const home = () => ch === 'telegram' && LEGACY ? sendWelcome(u.chatId) : say(welcome);
     const card = () => say(cardText(cardFor(ch, u.userId || u.chatId, u.name)), ch === 'telegram' ? CARD_IMG : '');
     if (sm) { // переход по ссылке: параметр после start решает, что показать
       if (key === 'card') return card();
@@ -104,7 +106,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     const d = q.data;
     if (d === 'disc') return sendPhotoFile(chat, DISC_IMG, DISC_TXT, IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP]]));
     if (d === 'pay') return send('telegram', chat, PAY_TXT, '', IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP], [URLB('обратиться в поддержку', SUPPORT)]]));
-    if (d === 'home') return send('telegram', chat, HOME_TXT, WELCOME_IMG, HOME_KB);
+    if (d === 'home') return sendWelcome(chat);
   }
   async function tgPoll() {
     let off = 0;
