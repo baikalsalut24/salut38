@@ -134,6 +134,11 @@ for (const v of [5, 10, 15, 20, 25, 30]) { // старые промокоды и
   const code = 'БОТ' + String(v).padStart(2, '0');
   if (!promos.some(x => x.code === code || (x.aliases || []).includes(code))) { promos.push({ code, kind: 'promo', type: 'percent', value: v, until: '', note: 'Из BotHelp: скидка ' + v + '% по сумме заказа', active: true, createdAt: new Date().toISOString(), by: 'система' }); save(F.promos, promos) }
 }
+{ // САЛЮТ15 — 15% по ссылке t.me/Salut38_bot?start=promo_salut15 (окно «15% скидка» на старом сайте); создаётся, только если ещё нет
+  let p = promos.find(x => x.code === 'САЛЮТ15' || (x.aliases || []).includes('САЛЮТ15'));
+  if (!p) { promos.push({ code: 'САЛЮТ15', kind: 'promo', type: 'percent', value: 15, until: '', note: 'Скидка 15% (ссылка из окна на сайте)', active: true, createdAt: new Date().toISOString(), by: 'система', slug: 'salut15' }); save(F.promos, promos) }
+  else if (!p.slug && !promos.some(x => x.slug === 'salut15')) { p.slug = 'salut15'; save(F.promos, promos) }
+}
 const promoState = p => !p.active ? 'paused' : (p.until && p.until < irkToday() ? 'expired' : 'ok');
 const findPromo = code => { const c = normCode(code); return c ? promos.find(p => p.code === c || (p.aliases || []).includes(c)) : null };
 const promoPub = p => { const used = Object.values(orders).filter(o => o.status !== 'cancelled' && [p.code, ...(p.aliases || [])].includes(normCode(o.promo))); return { ...p, state: promoState(p), uses: used.length, sum: used.reduce((s, o) => s + o.total, 0), disc: used.reduce((s, o) => s + (o.discount || 0), 0) } };
