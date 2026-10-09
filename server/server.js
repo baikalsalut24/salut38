@@ -157,6 +157,8 @@ const promoPub = p => { const used = Object.values(orders).filter(o => o.status 
 
 function view(o, role) {
   const v = { ...o, next: nextFor(role, o.status) };
+  v.items = o.items.map(i => ({ ...i, cat: catOf(i.sku)[0] || '' }));
+  if (o.subst && o.subst.length) v.subst = o.subst.map(c => ({ ...c, a: prodInfo(c.sku, c.name, c.price), b: c.offer ? prodInfo(c.offer.sku, c.offer.name, c.offer.price) : null }));
   if (o.notify) v.notify = { channel: o.notify.channel, email: o.notify.email || '', linked: !!o.notify.linked };
   if (M.includes(role) && o.promo) { const p = findPromo(o.promo), base = o.items.reduce((s, i) => s + i.sum, 0); v.promoInfo = p ? { state: o.discount > 0 ? 'applied' : promoState(p), kind: p.kind, type: p.type, value: p.value, discount: o.discount > 0 ? o.discount : promoDiscount(p, base) } : { state: 'unknown' } }
   if (role === 'storekeeper') { delete v.consentAt; delete v.notify; delete v.pay; delete v.paid; delete v.discountNote; delete v.phone; delete v.address; delete v.name; delete v.comment; delete v.promo; v.items = o.items.map(i => ({ ...i })); }
@@ -280,6 +282,10 @@ function sendOffer(o, c, remind) { // клиенту в Telegram: что зак�
 }
 const supNeed = (c, kind) => { c.sup = { kind, at: new Date().toISOString() }; c.supDone = false }; // вручную передаём заказы поставщику — нужно сообщить ему об изменении
 const catOf = sku => { const b = BASE.find(x => x.sku === sku); return b ? (b.cats || []).filter(x => x !== 'Хит продаж') : [] };
+function prodInfo(sku, name, price) { // карточка товара для сравнения «было / предложено»
+  const b = BASE.find(x => x.sku === sku) || {}, g = gpData()[sku], specs = ((g && g.p) || []).slice(0, 16).map(r => [String(r[0]), String(r[1]) + (r[2] ? ' ' + r[2] : '')]);
+  return { sku, name: name || b.name || sku, brand: b.brand || '', cat: (catOf(sku)[0]) || '', price, img: FEED.im[sku] || b.img || '', specs };
+}
 function selfList(o, c, page) { // весь список товаров из категории закончившегося
   const cs = catOf(c.sku), inO = o.items.map(i => i.sku);
   const l = BASE.filter(b => b.sku !== c.sku && !inO.includes(b.sku) && visibleNow(b) && (b.cats || []).some(x => cs.includes(x))).map(b => ({ b, pr: priceOf(b.sku, b.price) })).filter(x => x.pr > 0).sort((x, y) => Math.abs(x.pr - c.price) - Math.abs(y.pr - c.price));
@@ -503,7 +509,6 @@ async function api(req, res, url) {
       if (to !== 'cancelled' && to !== 'failed' && (o.subst || []).some(c => c.st === 'wait' || c.st === 'manual') && !note) return send(res, 400, { error: 'Есть позиция без утверждённой замены. Решите её или напишите комментарий, чтобы продолжить.' });
       if ((to === 'failed' || to === 'cancelled') && !note) return send(res, 400, { error: 'Укажите причину' });
       if (to === 'packed' && !isM && !o.items.every(i => i.picked)) return send(res, 400, { error: 'Отметьте все позиции собранными' });
-      if (to === 'packed' && isM && !o.items.every(i => i.picked) && !note) return send(res, 400, { error: 'Не все позиции отмечены собранными. Напишите комментарий, чтобы продолжить.' });
       if (to === 'shipping') o.courierId = role === 'courier' ? me.id : (o.courierId || (users.find(u => u.id === b.courierId && u.role === 'courier') || {}).id || null);
       if (to === 'delivered' && PAY[b.pay]) { o.pay = b.pay; o.paid = o.pay === 'paid' }
       if (to === 'confirmed' && o.status === 'picking') o.items.forEach(i => i.picked = false);
@@ -726,4 +731,4 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
   SUBS = require('./subs')({ DATA, alert: alertText, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
   BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), cardDefaults: () => cardCfg, orders: () => orders, persist, statusText, irkToday, substAnswer }); BOT.start() });
 
-if (process.env.BS_TEST) module.exports = { orders, BASE, startOos, substAnswer, remindSubst, setBot: b => { BOT = b }, cat };
+if (process.env.BS_TEST) module.exports = { view, orders, BASE, startOos, substAnswer, remindSubst, setBot: b => { BOT = b }, cat };
