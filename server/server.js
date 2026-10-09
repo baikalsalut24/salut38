@@ -130,6 +130,10 @@ const TIER = t => t < 5000 ? 5 : t < 20000 ? 10 : t < 50000 ? 15 : t < 100000 ? 
 const promoDiscount = (p, total) => p.type === 'percent' ? Math.round(total * p.value / 100) : p.type === 'amount' ? Math.min(Math.round(p.value), total) : Math.round(total * TIER(total) / 100);
 const cleanSlug = v => { const t = String(v == null ? '' : v).trim().toLowerCase(); return t === '' ? '' : /^[a-z0-9_-]{2,40}$/.test(t) ? t : null }; // метка для ссылки на бота: t.me/бот?start=promo_МЕТКА
 const irkToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+for (const v of [5, 10, 15, 20, 25, 30]) { // старые промокоды из BotHelp: остаются рабочими; создаются, только если их ещё нет
+  const code = 'БОТ' + String(v).padStart(2, '0');
+  if (!promos.some(x => x.code === code || (x.aliases || []).includes(code))) { promos.push({ code, kind: 'promo', type: 'percent', value: v, until: '', note: 'Из BotHelp: скидка ' + v + '% по сумме заказа', active: true, createdAt: new Date().toISOString(), by: 'система' }); save(F.promos, promos) }
+}
 const promoState = p => !p.active ? 'paused' : (p.until && p.until < irkToday() ? 'expired' : 'ok');
 const findPromo = code => { const c = normCode(code); return c ? promos.find(p => p.code === c || (p.aliases || []).includes(c)) : null };
 const promoPub = p => { const used = Object.values(orders).filter(o => o.status !== 'cancelled' && [p.code, ...(p.aliases || [])].includes(normCode(o.promo))); return { ...p, state: promoState(p), uses: used.length, sum: used.reduce((s, o) => s + o.total, 0), disc: used.reduce((s, o) => s + (o.discount || 0), 0) } };
@@ -181,7 +185,7 @@ const TG = process.env.TG_TOKEN || '', TG_BOT = process.env.TG_BOT || '', TG_API
 const MAX_BOT = process.env.MAX_BOT || '';
 const NOTE = { new: 'принят', confirmed: 'принят в работу', picking: 'передан на сборку', packed: 'собран и скоро поедет к вам', shipping: 'передан курьеру, он уже в пути', delivered: 'отгружен. Спасибо, что выбрали «Байкал Салют»!', failed: 'не удалось доставить, менеджер свяжется с вами', cancelled: 'отменён' };
 const tgSend = (chat, text) => TG && chat ? fetch(TG_API + '/bot' + TG + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text }) }).catch(e => console.error('tg', e.message)) : null;
-let BOT = null;
+let BOT = null, SUBS = null;
 // Уведомление о новом заказе в служебный бот (ALERT_TOKEN, ALERT_CHAT в /etc/bs.env) — только для владельца
 const ALERT_TOKEN = process.env.ALERT_TOKEN || '', ALERT_CHAT = process.env.ALERT_CHAT || '', ALERT_CH = process.env.ALERT_CHANNEL || 'telegram', MAX_API_A = process.env.MAX_API || 'https://platform-api.max.ru';
 function alertOrder(o) {
@@ -438,6 +442,7 @@ async function api(req, res, url) {
     return send(res, 200, { counts, days, delivered: done.length, deliveredSum: done.reduce((s, o) => s + o.total, 0), openSum: all.filter(o => !['delivered', 'cancelled'].includes(o.status)).reduce((s, o) => s + o.total, 0) });
   }
 
+  if (p.startsWith('/api/subs') || p.startsWith('/api/broadcasts')) { if (!isM) return send(res, 403, { error: 'Только менеджер' }); if (!SUBS) return send(res, 503, { error: 'Подписчики недоступны' }); return SUBS.route(req, res, url, me, send) }
   if (p === '/api/botinfo') { if (!isM) return send(res, 403, { error: 'Только менеджер' }); return send(res, 200, { tg: TG_BOT, max: MAX_BOT }) }
   if (p === '/api/promos') {
     if (!isM) return send(res, 403, { error: 'Только менеджер' });
@@ -519,4 +524,9 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
     }
     stat(req, res, url);
   } catch (e) { console.error(e); if (!res.headersSent) send(res, 500, { error: 'server' }) }
-}).listen(PORT, () => { console.log('Байкал Салют: сервер заказов на порту ' + PORT); BOT = require('./cardbot')({ promos: () => promos, savePromos: () => save(F.promos, promos), orders: () => orders, persist, statusText, irkToday }); BOT.start() });
+}).listen(PORT, () => { console.log('Байкал Салют: сервер заказов на порту ' + PORT); const ownerOf = o => { // чей заказ (id в Telegram): по привязке статусов или по личной карте клиента
+    if (o.notify && o.notify.channel === 'telegram' && o.notify.chatId) return String(o.notify.chatId);
+    const pr = o.promo ? findPromo(o.promo) : null; return pr && pr.owner && pr.owner.ch === 'telegram' ? String(pr.owner.id) : '';
+  };
+  SUBS = require('./subs')({ DATA, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
+  BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), orders: () => orders, persist, statusText, irkToday }); BOT.start() });

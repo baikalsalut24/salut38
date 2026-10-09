@@ -8,6 +8,23 @@ const TG = E.TG_TOKEN || '', TG_API = E.TG_API || 'https://api.telegram.org';
 const MAXT = E.MAX_TOKEN || '', MAX_API = E.MAX_API || 'https://platform-api.max.ru';
 const SITE = (E.SITE_URL || '').replace(/\/$/, ''), CARD_IMG = E.CARD_IMG || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fs = require('fs'), path = require('path');
+const SUPPORT = E.SUPPORT_URL || 'https://t.me/baikalsalut', WELCOME_IMG = E.WELCOME_IMG || CARD_IMG;
+const LEGACY = E.LEGACY_MENU !== '0'; // меню как в BotHelp (скидки / оплата, доставка / поддержка). После переезда: LEGACY_MENU=0
+const DISC_IMG = path.join(__dirname, 'assets', 'discounts.png');
+async function sendPhotoFile(chat, file, caption, kb) { // картинка с диска; если не вышло — просто текст
+  try {
+    const fd = new FormData(); fd.append('chat_id', String(chat)); fd.append('caption', caption); if (kb) fd.append('reply_markup', JSON.stringify(kb)); fd.append('photo', new Blob([fs.readFileSync(file)]), 'a.png');
+    const r = await (await fetch(TG_API + '/bot' + TG + '/sendPhoto', { method: 'POST', body: fd })).json(); if (r.ok) return r;
+  } catch (e) { console.error('bot photo', e.message) }
+  return jpost(TG_API + '/bot' + TG + '/sendMessage', { chat_id: chat, text: caption, ...(kb ? { reply_markup: kb } : {}) });
+}
+const IK = rows => ({ inline_keyboard: rows }), URLB = (t, u) => ({ text: t, url: u });
+const SHOP = SITE ? [URLB('в магазин', SITE)] : [];
+const HOME_KB = IK([[{ text: 'скидки', callback_data: 'disc' }, ...(SITE ? [URLB('выбрать салют', SITE)] : [])], [{ text: 'оплата, доставка', callback_data: 'pay' }], [URLB('обратиться в поддержку', SUPPORT)]]);
+const HOME_TXT = '🎁 Байкал Салют поддержка, рады поделиться с вами списком актуальных промокодов на скидки от 5% до 30%.\n\n🧐 Есть вопросы? Напишите нам в телеграм по ссылке: ' + SUPPORT + '\n\n👇 Нажмите кнопку "скидки", чтобы получить список промокодов 👇';
+const DISC_TXT = '👉 Промокоды вводятся после добавления товаров в корзину перед нажатием на кнопку "Оформить заказ".\n🛒 Приятных вам покупок)';
+const PAY_TXT = '🚚 По городу Иркутску бесплатная доставка до ваших дверей.\n👋 Дату и время доставки вы выбираете сами\n💰 Вы оплачиваете заказ только после его получения';
 const jpost = (url, body, headers) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }).then(r => r.json().catch(() => ({}))).catch(e => { console.error('bot', e.message); return {} });
 
 async function send(ch, chat, text, photo, kb) {
@@ -39,7 +56,11 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
   async function handle(ch, u) { // u: { chatId, userId, name, text }
     const t = Date.now(); if (t - (last.get(u.chatId) || 0) < 1500) return; last.set(u.chatId, t); if (last.size > 5000) last.clear();
     const text = String(u.text || '').trim(), sm = text.match(/^\/start(?:\s+(\S+))?/), key = sm && sm[1];
-    const kb = ch === 'telegram' ? KB : undefined, say = (x, photo) => send(ch, u.chatId, x, photo, kb);
+    const sid = u.userId || u.chatId;
+    if (ch === 'telegram' && /^\/stop\b/i.test(text)) { ctx.subs && ctx.subs.setSt(sid, 'unsub', TG); return send(ch, u.chatId, 'Вы отписались от рассылок. Заказы и статусы это не затрагивает. Чтобы вернуться, нажмите /start.') }
+    if (ch === 'telegram' && ctx.subs) ctx.subs.touch(sid, { start: !!sm, name: u.name, tag: key === 'card' ? 'бот:карта' : key && key.startsWith('promo_') ? 'бот:' + key : '' }, TG);
+    const kb = ch === 'telegram' && !LEGACY ? KB : undefined, say = (x, photo) => send(ch, u.chatId, x, photo, kb);
+    const home = () => ch === 'telegram' && LEGACY ? send(ch, u.chatId, HOME_TXT, WELCOME_IMG, HOME_KB) : say(welcome);
     const card = () => say(cardText(cardFor(ch, u.userId || u.chatId, u.name)), ch === 'telegram' ? CARD_IMG : '');
     if (sm) { // переход по ссылке: параметр после start решает, что показать
       if (key === 'card') return card();
@@ -50,7 +71,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
       }
       const o = key && Object.values(ctx.orders()).find(x => x.notify && x.notify.token === key && x.notify.channel === ch);
       if (o) { o.notify.chatId = String(u.chatId); o.notify.linked = true; ctx.persist(); return say('Готово! Будем сообщать о статусе заказа здесь.\n' + ctx.statusText(o)) }
-      return say(welcome); // просто /start — человек нашёл бота сам или ему его переслали
+      return home(); // просто /start — человек нашёл бота сам или ему его переслали
     }
     if (/^\/card\b/i.test(text) || /моя карта/i.test(text)) return card();
     if (/^\/order\b/i.test(text) || /мой заказ/i.test(text)) {
@@ -65,14 +86,27 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
       if (o && String(o.phone || '').replace(/\D/g, '').endsWith(m[2])) return say(ctx.statusText(o));
       failAdd(u.chatId); return say('Заказ не найден. Проверьте номер заказа и последние 4 цифры телефона.');
     }
-    return say(welcome);
+    return home();
+  }
+  async function onCallback(q) { // нажатия кнопок меню
+    const chat = q.message && q.message.chat && q.message.chat.id; if (!chat) return;
+    jpost(TG_API + '/bot' + TG + '/answerCallbackQuery', { callback_query_id: q.id });
+    if (ctx.subs) ctx.subs.touch(q.from && q.from.id || chat, { name: q.from && q.from.first_name }, TG);
+    const d = q.data;
+    if (d === 'disc') return sendPhotoFile(chat, DISC_IMG, DISC_TXT, IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP]]));
+    if (d === 'pay') return send('telegram', chat, PAY_TXT, '', IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP], [URLB('обратиться в поддержку', SUPPORT)]]));
+    if (d === 'home') return send('telegram', chat, HOME_TXT, WELCOME_IMG, HOME_KB);
   }
   async function tgPoll() {
     let off = 0;
     for (;;) {
       try {
         const r = await (await fetch(TG_API + '/bot' + TG + '/getUpdates?timeout=25&offset=' + off)).json();
-        for (const u of r.result || []) { off = u.update_id + 1; const m = u.message; if (!m || m.chat.type !== 'private') continue; await handle('telegram', { chatId: m.chat.id, userId: m.from && m.from.id, name: m.from && m.from.first_name, text: m.text || '' }) }
+        for (const u of r.result || []) {
+          off = u.update_id + 1;
+          if (u.callback_query) { await onCallback(u.callback_query); continue }
+          if (u.my_chat_member && u.my_chat_member.chat && u.my_chat_member.chat.type === 'private' && ctx.subs) { const s = u.my_chat_member.new_chat_member && u.my_chat_member.new_chat_member.status; if (s === 'kicked' || s === 'left') ctx.subs.setSt(u.my_chat_member.chat.id, 'blocked', TG); continue }
+          const m = u.message; if (!m || m.chat.type !== 'private') continue; await handle('telegram', { chatId: m.chat.id, userId: m.from && m.from.id, name: m.from && m.from.first_name, text: m.text || '' }) }
       } catch (e) { await sleep(5000) }
     }
   }
