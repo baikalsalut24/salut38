@@ -294,7 +294,7 @@ const offerBlock = of => prodBlock('✅ Предложение автозаме�
 function orderLink(o) { if (!o.vt) { o.vt = crypto.randomBytes(12).toString('hex'); persist() } return APP_BASE() + '/o/' + o.vt }
 const ORDER_KB = o => ({ inline_keyboard: [[{ text: '📄 Состав заказа', url: orderLink(o) }]] });
 /* Все замены заказа клиент решает на одной странице /r/<код>. В чат: приглашение (через 3 минуты после первой «Закончился»), до 3 напоминаний, итог */
-const BATCH_MS = (+process.env.REPL_BATCH_MIN || 0) * 60e3; // задержка приглашения о заменах; временно 0 — сразу (вернуть: REPL_BATCH_MIN=3 в /etc/bs.env)
+const BATCH_MS = (process.env.REPL_BATCH_MIN != null ? +process.env.REPL_BATCH_MIN : 1) * 60e3; // задержка приглашения о заменах: 1 минута (поменять: REPL_BATCH_MIN в /etc/bs.env, 0 — сразу)
 const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c };
 const ended = n => 'закончил' + plural(n, 'ась', 'ись', 'ись') + ' ' + n + ' ' + plural(n, 'позиция', 'позиции', 'позиций');
 function replLink(o) { if (!o.rt) { o.rt = crypto.randomBytes(12).toString('hex'); persist() } return APP_BASE() + '/r/' + o.rt }

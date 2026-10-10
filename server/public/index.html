@@ -273,7 +273,7 @@ function sheet(o,refresh){
   bg.onclick=async e=>{
     if(e.target===bg||e.target.id==='xs')return closeSheet();
     if(e.target.closest('#ed'))return editOrder(o);
-    const ob=e.target.closest('[data-oos]');if(ob){if(!confirm('Товар закончился? Он скроется с сайта минимум на 15 дней. Клиенту сразу уйдёт сообщение со ссылкой на страницу замен.'))return;try{upd(await api(`/api/orders/${encodeURIComponent(o.id)}/oos`,{method:'POST',body:{sku:ob.dataset.oos}}));toast('Скрыто с сайта. Ссылка клиенту уйдёт через 3 минуты',false,true)}catch(er){toast(er.error,true)}return}
+    const ob=e.target.closest('[data-oos]');if(ob){if(!confirm('Товар закончился? Он скроется с сайта минимум на 15 дней. Через минуту клиенту уйдёт одно сообщение со ссылкой на страницу замен — успейте отметить остальные закончившиеся позиции.'))return;try{upd(await api(`/api/orders/${encodeURIComponent(o.id)}/oos`,{method:'POST',body:{sku:ob.dataset.oos}}));toast('Скрыто с сайта. Ссылка клиенту уйдёт через 3 минуты',false,true)}catch(er){toast(er.error,true)}return}
     const sa=e.target.closest('[data-sall]');if(sa){if(!confirm('Поставщик уведомлён обо всех заменах по заказу? После этого клиент не сможет менять решения.'))return;try{upd(await api(`/api/orders/${encodeURIComponent(o.id)}/subst`,{method:'POST',body:{action:'supplierAll'}}));toast('Отмечено',false,true)}catch(er){toast(er.error,true)}return}
     const cpb=e.target.closest('[data-cp]');if(cpb)return copyTxt(cpb.dataset.cp);
     const sb=e.target.closest('[data-sa]');if(sb){substAct(o,sb.dataset.sc,sb.dataset.sa);return}
