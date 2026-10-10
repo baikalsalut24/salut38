@@ -464,7 +464,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 .tools.mini .sortbtns button{padding:5px 4px;font-size:12px;border-radius:9px}
 .tools.mini #cnt{opacity:0;max-width:0}
 /* ===== избранное, карточка товара, лесенка (макет 10.10) ===== */
-.fav{position:absolute;top:8px;right:8px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.94);display:grid;place-items:center;box-shadow:0 2px 8px rgba(16,22,42,.15);z-index:2}
+.fav{position:absolute;top:7px;right:7px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.94);display:grid;place-items:center;box-shadow:0 2px 8px rgba(16,22,42,.15);z-index:2}
 .fav.on{background:#fff}
 .card .pcard{font-size:12px;font-weight:800;color:#1F9D55;margin-top:-4px}
 #favBtn .badge{background:#E5121B;color:#fff}#favCount[hidden]{display:none}
@@ -473,7 +473,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 .pp-img svg{width:100%;max-height:420px;display:block}
 .pp-img{min-height:280px}
 .ppa{position:absolute;top:10px;right:10px;display:flex;gap:8px;z-index:2}
-.ppa button{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.94);display:grid;place-items:center;box-shadow:0 2px 8px rgba(16,22,42,.15)}
+.ppa button{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.94);display:grid;place-items:center;box-shadow:0 2px 8px rgba(16,22,42,.15)}
 .ppa .fav{position:static}
 .pp-w .chps{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
 .chp{background:var(--panel2);border-radius:9px;padding:6px 10px;font-weight:700;font-size:13.5px}
@@ -529,6 +529,15 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 .lbar-l{height:9px;background:rgba(255,255,255,.15);border-radius:6px;margin:8px 0 5px;overflow:hidden}.lbar-l i{display:block;height:100%;background:#FFD21F;border-radius:6px}
 .lbar-s{display:flex;justify-content:space-between;font-size:10.5px;color:#9aa3bd}
 .cardsave .lbar{margin:8px 0}
+.line{grid-template-columns:60px 1fr!important;align-items:center!important;gap:10px!important;padding:8px 0!important}
+.line .t{width:60px!important;height:60px!important;aspect-ratio:auto!important;border-radius:10px!important}
+.line .t img{padding:3px!important}
+.line .t .vbtn{font-size:0;gap:0;padding:2px;left:3px;bottom:3px}.line .t .vbtn i{width:16px;height:16px}
+.line .li{display:grid!important;grid-template-columns:1fr auto;align-items:center;gap:1px 8px!important}
+.line .li>b:first-of-type{grid-column:1/-1;font-size:13.5px!important;line-height:1.2!important;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.line .li>small{grid-column:1/-1;font-size:12px}
+.line .li .q{margin-top:3px!important}.line .li .q button{width:28px;height:28px}
+.line .li .lt{margin:0!important;padding:0!important;font-size:15px!important;text-align:right}
 /* спасибо за заказ */
 .done .ok-i{width:62px;height:62px;border-radius:50%;background:#E6F6EC;color:#1F9D55;font-size:32px;font-weight:900;display:grid;place-items:center;margin:0 auto 10px}
 .done .trk{text-align:left;margin-top:12px}.done .trk p{color:var(--muted);font-size:13.5px;margin:4px 0 10px;line-height:1.35}
@@ -564,7 +573,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
       <a href="#catalog">Каталог</a><a href="#discount">Скидки</a><a href="#geo">Доставка</a><a href="#contacts">Контакты</a>
     </nav>
     <button class="icon-btn" id="favBtn" aria-label="Избранное">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"><path d="M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 4.5 6.8 4.5c2.2 0 3.6 1.3 5.2 3.2 1.6-1.9 3-3.2 5.2-3.2 3.8 0 5.8 3.9 4.4 7.2C19.5 16.4 12 21 12 21z"/></svg>
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"><path d="M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 4.5 6.8 4.5c2.2 0 3.6 1.3 5.2 3.2 1.6-1.9 3-3.2 5.2-3.2 3.8 0 5.8 3.9 4.4 7.2C19.5 16.4 12 21 12 21z"/></svg>
       <span class="badge" id="favCount" hidden>0</span>
     </button>
     <button class="icon-btn" id="cartBtn" aria-label="Корзина">
@@ -821,7 +830,7 @@ function card(p){
   const spec=specHtml(p);
   return `<article class="card" data-open="${k}">${p.hit?'<span class="hit">Хит</span>':''}
     <div class="img">${thumb(p)}<button type="button" class="fav${isFav(p.sku)?' on':''}" data-fav="${k}" aria-label="${isFav(p.sku)?'Убрать из избранного':'В избранное'}">${HEART(isFav(p.sku))}</button>${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотреть видео"><i></i>Видео</button>`:''}</div>
-    <div class="info"><div class="brand">${esc(p.brand)}</div><h3>${esc(p.name)}</h3><div class="spec">${spec}</div><div class="price">${ruble(p.price)}</div><div class="pcard">с картой −${tierPc(p.price)}%: ${ruble(withPc(p.price,tierPc(p.price)))}</div>
+    <div class="info"><div class="brand">${esc(p.brand)}</div><h3>${esc(p.name)}</h3><div class="spec">${spec}</div><div class="price">${ruble(p.price)}</div><div class="pcard">${hasCard()?'по вашей карте':'с картой'} −${tierPc(p.price)}%: ${ruble(withPc(p.price,tierPc(p.price)))}</div>
     ${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div>`
        :`<button class="add" data-p="${k}">В корзину</button>`}
     </div></article>`;
@@ -928,7 +937,7 @@ function ladderHtml(sum){const pc=tierPc(sum),nx=nextTier(sum);
 function ladderBar(sum){const pc=tierPc(sum),nx=nextTier(sum);if(!nx)return '<div class="lbar"><div class="lbar-t"><b>Скидка по карте 30%</b><span>максимальная</span></div><div class="lbar-l"><i style="width:100%"></i></div></div>';
   const cur=TIERS.find(t=>t[1]===pc)[0],w=Math.max(4,Math.round((sum-cur)/(nx.min-cur)*100));
   return '<div class="lbar"><div class="lbar-t"><b>Скидка по карте '+pc+'%</b><span>до '+nx.pc+'% — ещё '+ruble(nx.min-sum)+'</span></div><div class="lbar-l"><i style="width:'+w+'%"></i></div><div class="lbar-s"><span>'+ruble(cur)+' · '+pc+'%</span><span>'+ruble(nx.min)+' · '+nx.pc+'%</span></div></div>'}
-const HEART=on=>'<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 4.5 6.8 4.5c2.2 0 3.6 1.3 5.2 3.2 1.6-1.9 3-3.2 5.2-3.2 3.8 0 5.8 3.9 4.4 7.2C19.5 16.4 12 21 12 21z" fill="'+(on?'#E5121B':'none')+'" stroke="'+(on?'#E5121B':'#10162A')+'" stroke-width="2" stroke-linejoin="round"/></svg>';
+const HEART=on=>'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 4.5 6.8 4.5c2.2 0 3.6 1.3 5.2 3.2 1.6-1.9 3-3.2 5.2-3.2 3.8 0 5.8 3.9 4.4 7.2C19.5 16.4 12 21 12 21z" fill="'+(on?'#E5121B':'none')+'" stroke="'+(on?'#E5121B':'#10162A')+'" stroke-width="2" stroke-linejoin="round"/></svg>';
 let FAV=[];try{FAV=JSON.parse(localStorage.getItem('bs_fav')||'[]').filter(k=>BY.has(k))}catch(e){}
 const isFav=k=>FAV.indexOf(k)>-1;
 function favBadge(){const b=document.getElementById('favCount');if(b){b.textContent=FAV.length;b.hidden=!FAV.length}}
@@ -964,6 +973,11 @@ document.addEventListener('click',e=>{
   if(e.target.closest('[data-seen-clear]')){PPV=PPSKU?[PPSKU]:[];try{localStorage.setItem('bs_viewed',JSON.stringify(PPV))}catch(x){}ppDraw();return}
 },true);
 
+/* карта клиента запоминается на телефоне: введена один раз или пришла ссылкой из бота (#card/НОМЕР или ?card=НОМЕР) */
+function cardBoot(){let c='';const m=location.hash.match(/^#card\/([^/?#]+)/),q=new URLSearchParams(location.search).get('card');
+  if(m||q){c=decodeURIComponent(m?m[1]:q).trim();try{history.replaceState(null,'',location.pathname)}catch(e){}}
+  if(!c)try{c=localStorage.getItem('bs_card')||''}catch(e){}
+  if(!c||!window.ORDER_URL)return;applyPromo(c).then(()=>{if(hasCard()){sync();if(m||q)msgShow('Карта клиента подключена: скидка до 30%')}})}
 /* страница товара */
 let PPSKU=null,PPH=false;
 let PPV=[];try{PPV=JSON.parse(localStorage.getItem('bs_viewed')||'[]')}catch(e){}
@@ -985,16 +999,16 @@ function cardBox(p){const base=cardBase(p),pc=tierPc(base),nx=nextTier(base),cp=
    <a class="cbx-go" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту за 10 секунд</a><div class="cbx-s">Номер карты придёт в Telegram — введите его в корзине</div></div>`}
 function ppHtml(p){const k=esc(p.sku),n=cart[p.sku]||0,pc=tierPc(cardBase(p)),cp=withPc(p.price,pc),fv=isFav(p.sku);
   const rows=[['Бренд',p.brand],['Категория',(p.cats||[]).filter(c=>c!=='Хит продаж').join(', ')],['Артикул',p.sku],['Видеообзор',(p.v||p.vid)?'есть':'']].concat(p.pm||[]).concat((!(p.pm||[]).some(r=>/время работы/i.test(r[0]))&&p.du>0&&SORTCATS.some(c=>(p.cats||[]).indexOf(c)>-1))?[['Время работы','~'+durTxt(p.du)]]:[]).filter(r=>r[1]);
-  const seen=PPV.filter(x=>x!==p.sku).map(x=>BY.get(x)).filter(Boolean).slice(0,12),sim=simByPrice(p);
+  const seen=PPV.filter(x=>x!==p.sku).map(x=>BY.get(x)).filter(Boolean).slice(0,12);
   const vlen=p.du>0?" · "+Math.floor((p.du+2)/60)+":"+("0"+Math.round(p.du+2)%60).slice(-2):"";
   return `<div class="pp-h"><button type="button" data-pp-x="1">← Назад</button><b>${esc(p.name)}</b></div>
   <div class="pp-w"><div class="pp-img">${p.hit?'<span class="hit">Хит</span>':''}${thumb(p)}<div class="ppa"><button type="button" data-pp-share="1" aria-label="Поделиться"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10162A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg></button><button type="button" class="fav${fv?' on':''}" data-fav="${k}" aria-label="${fv?'Убрать из избранного':'В избранное'}">${HEART(fv)}</button></div>${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотрите видео"><i></i>Смотрите видео${vlen}</button>`:''}</div>
    <div><div class="pp-br">${esc(p.brand)} · ${esc((p.cats||[]).filter(c=>c!=='Хит продаж')[0]||'')}</div><h1>${esc(p.name)}</h1><div class="chps">${ppChips(p)}</div></div>
-   <div class="pp-prr"><div><small>Цена</small><div class="pp-pr">${ruble(p.price)}</div></div><div class="pp-cp"><small>С картой клиента −${pc}%</small><b>${ruble(cp)}</b></div></div>
+   <div class="pp-prr"><div><small>Цена</small><div class="pp-pr">${ruble(p.price)}</div></div><div class="pp-cp"><small>${hasCard()?'По вашей карте':'С картой клиента'} −${pc}%</small><b>${ruble(cp)}</b></div></div>
    ${trustHtml()}${cardBox(p)}
    <div class="pp-t">${rows.map(r=>`<div><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>
    ${seen.length?`<div class="seen-h"><h2>Вы смотрели</h2><button type="button" data-seen-clear="1">очистить</button></div><div class="seen">${seen.map(x=>`<button type="button" class="sn" data-open-fav="${esc(x.sku)}">${thumb(x)}<span>${esc(x.name)}</span><b>${ruble(x.price)}</b></button>`).join('')}</div>`:''}
-   ${sim.length?`<h2>Похожие по цене</h2><div class="simg">${sim.map(card).join('')}</div>`:''}</div>
+   </div>
   <div class="pp-bar"><div class="pb-p">${ruble(p.price)}<small>с картой ${ruble(cp)}</small></div><div class="pb-a">${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div>`:`<button class="add" data-p="${k}">В корзину</button>`}<button type="button" id="ppcart">Корзина${count()?' · '+count():''}</button></div></div>`}
 
 function ppDraw(){const el=document.getElementById('ppg'),p=BY.get(PPSKU);if(!el||!p)return;const sc=el.scrollTop;el.innerHTML=ppHtml(p);el.scrollTop=sc}
@@ -1098,7 +1112,8 @@ async function applyPromo(code){
     if(window.ORDER_URL){const r=await fetch(new URL('/promo/check?code='+encodeURIComponent(PROMO),window.ORDER_URL).href);const j=await r.json();if(j.ok)PROMO_INFO={type:j.type,value:j.value,min:+j.min||0,kind:j.kind||'promo'}}
     else if(uni)PROMO_INFO={type:'tiers',value:null}
   }catch(e){net=true;if(uni)PROMO_INFO={type:'tiers',value:null}}
-  if(PROMO_INFO)PROMO_OK=true;
+  if(PROMO_INFO){PROMO_OK=true;if(PROMO_INFO.kind==='card')try{localStorage.setItem('bs_card',PROMO)}catch(e){}}
+  else if(!net)try{if(localStorage.getItem('bs_card')===PROMO)localStorage.removeItem('bs_card')}catch(e){}
   else PROMO_MSG=net?'Не удалось проверить промокод. Проверьте интернет и попробуйте ещё раз.':'Такого промокода нет в базе. Проверьте, пожалуйста, написание.';
   renderCart()}
 function renderCart(){
@@ -1338,7 +1353,7 @@ function closeVideo(){VSKU=null;document.getElementById('vframe').classList.remo
 document.addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){e.preventDefault();e.stopPropagation();openVideo(b.dataset.v);return}
   if(e.target.id==='vmodal'||e.target.id==='vclose')closeVideo()},true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeVideo()});
-setHH();favBadge();if(!openHashFav()&&!openHashProduct()&&parseHash())onHash();
+setHH();favBadge();cardBoot();if(!openHashFav()&&!openHashProduct()&&parseHash())onHash();
 heroFx();window.addEventListener('resize',heroFx);window.addEventListener('load',heroFx);if(document.fonts)document.fonts.ready.then(heroFx);renderCats();renderGrid();renderCart();
 </script>
 </body>
