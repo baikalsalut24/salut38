@@ -294,7 +294,7 @@ const offerBlock = of => prodBlock('✅ Предложение автозаме�
 function orderLink(o) { if (!o.vt) { o.vt = crypto.randomBytes(12).toString('hex'); persist() } return APP_BASE() + '/o/' + o.vt }
 const ORDER_KB = o => ({ inline_keyboard: [[{ text: '📄 Состав заказа', url: orderLink(o) }]] });
 /* Все замены заказа клиент решает на одной странице /r/<код>. В чат: приглашение (через 3 минуты после первой «Закончился»), до 3 напоминаний, итог */
-const BATCH_MS = 3 * 60e3;
+const BATCH_MS = (+process.env.REPL_BATCH_MIN || 0) * 60e3; // задержка приглашения о заменах; временно 0 — сразу (вернуть: REPL_BATCH_MIN=3 в /etc/bs.env)
 const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c };
 const ended = n => 'закончил' + plural(n, 'ась', 'ись', 'ись') + ' ' + n + ' ' + plural(n, 'позиция', 'позиции', 'позиций');
 function replLink(o) { if (!o.rt) { o.rt = crypto.randomBytes(12).toString('hex'); persist() } return APP_BASE() + '/r/' + o.rt }
@@ -311,7 +311,7 @@ function inviteText(o, ids) { // ids — новые позиции для «за
     : '<b>Заказ № ' + hx(o.id) + '</b>\nК сожалению, ' + ended(n) + '. Мы уже подобрали ' + (n > 1 ? 'замены, их можно посмотреть и согласовать одним списком.' : 'замену, её можно посмотреть и согласовать по ссылке.');
   return head + '\n\n' + l.map(endedLine).join('\n') + '\n\n<i>Решено: ' + st.done + ' из ' + st.all + '</i>';
 }
-function flushRepl() { // через 3 минуты после первой «Закончился» — одно сообщение со ссылкой на страницу замен
+function flushRepl() { // после «Закончился» (сразу или через REPL_BATCH_MIN минут) — одно сообщение со ссылкой на страницу замен
   const now = Date.now(); let ch = false;
   for (const o of Object.values(orders)) {
     const rp = o.rp; if (!rp || !rp.due || Date.parse(rp.due) > now) continue;
@@ -381,6 +381,7 @@ function startOos(o, sku, by) {
   c.noChat = !chatOf(o); if (c.noChat && !off) c.st = 'manual';
   const rp = o.rp || (o.rp = {}); if (!rp.due) rp.due = new Date(Date.now() + BATCH_MS).toISOString(); rp.doneSent = false; replLink(o);
   o.updatedAt = new Date().toISOString(); persist();
+  if (!BATCH_MS) setImmediate(flushRepl); // без задержки — клиенту сразу
   return { ok: true };
 }
 function acceptSubst(o, c, by) {
