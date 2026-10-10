@@ -68,7 +68,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     if (ch === 'telegram' && ctx.subs) ctx.subs.touch(sid, { start: !!sm, name: u.name, tag: key && /^card(_|$)/.test(key) ? 'бот:карта' : key && key.startsWith('promo_') ? 'бот:' + key : '' }, TG);
     const kb = ch === 'telegram' && !LEGACY ? KB : undefined, say = (x, photo) => send(ch, u.chatId, x, photo, kb);
     const home = () => ch === 'telegram' && LEGACY ? sendWelcome(u.chatId) : say(welcome);
-    const card = cs => { const c = cardFor(ch, u.userId || u.chatId, u.name); if (cs && ctx.claimCard) ctx.claimCard(cs, c.code); return say(cardText(c), ch === 'telegram' ? CARD_IMG : '') }; // cs — метка сайта: сайт сам подхватит номер карты
+    const card = cs => { const c = cardFor(ch, u.userId || u.chatId, u.name); if (cs && ctx.claimCard) ctx.claimCard(cs, c.code); if (ch === 'telegram' && (SITE || SHOP_URL)) return send(ch, u.chatId, cardText(c), CARD_IMG, { inline_keyboard: [[{ text: '🛒 Вернуться в магазин', url: (SITE || SHOP_URL) + '/#card/' + encodeURIComponent(c.code) }]] }); return say(cardText(c), ch === 'telegram' ? CARD_IMG : '') }; // кнопка ведёт на сайт с номером карты — скидка применится сама // cs — метка сайта: сайт сам подхватит номер карты
     if (sm) { // переход по ссылке: параметр после start решает, что показать
       if (key === 'card') return card();
       if (key && /^card_[a-f0-9]{12,40}$/.test(key)) return card(key.slice(5));
