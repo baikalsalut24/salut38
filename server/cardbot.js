@@ -19,6 +19,13 @@ async function sendPhotoFile(chat, file, caption, kb, fname) { // картинк
   } catch (e) { console.error('bot photo', e.message) }
   return jpost(TG_API + '/bot' + TG + '/sendMessage', { chat_id: chat, text: caption, ...(kb ? { reply_markup: kb } : {}) });
 }
+const CARDDIR = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'cards');
+function cardPic(code) { // красивая картинка карты с номером (python3 + Pillow), один раз на карту — дальше из папки
+  const f = path.join(CARDDIR, String(code).replace(/[^0-9A-Za-z-]/g, '') + '.png');
+  if (fs.existsSync(f)) return Promise.resolve(f);
+  try { fs.mkdirSync(CARDDIR, { recursive: true }) } catch {}
+  return new Promise(ok => require('child_process').execFile('python3', [path.join(__dirname, 'cardimg.py'), String(code), f], { timeout: 30e3 }, e => ok(!e && fs.existsSync(f) ? f : '')));
+}
 const IK = rows => ({ inline_keyboard: rows }), URLB = (t, u) => ({ text: t, url: u });
 const SHOP_URL = (E.SHOP_URL || 'https://salut38.shop').replace(/\/$/, ''), WELCOME_FILE = path.join(__dirname, 'assets', 'welcome.jpg'); // SHOP_URL — куда ведут кнопки «выбрать салют / в магазин» (пока старый сайт)
 const SHOP = SHOP_URL ? [URLB('в магазин', SHOP_URL)] : [];
@@ -68,7 +75,7 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     if (ch === 'telegram' && ctx.subs) ctx.subs.touch(sid, { start: !!sm, name: u.name, tag: key && /^card(_|$)/.test(key) ? 'бот:карта' : key && key.startsWith('promo_') ? 'бот:' + key : '' }, TG);
     const kb = ch === 'telegram' && !LEGACY ? KB : undefined, say = (x, photo) => send(ch, u.chatId, x, photo, kb);
     const home = () => ch === 'telegram' && LEGACY ? sendWelcome(u.chatId) : say(welcome);
-    const card = cs => { const c = cardFor(ch, u.userId || u.chatId, u.name); if (cs && ctx.claimCard) ctx.claimCard(cs, c.code); if (ch === 'telegram' && (SITE || SHOP_URL)) return send(ch, u.chatId, cardText(c), CARD_IMG, { inline_keyboard: [[{ text: '🛒 Вернуться в магазин', url: (SITE || SHOP_URL) + '/#card/' + encodeURIComponent(c.code) }]] }); return say(cardText(c), ch === 'telegram' ? CARD_IMG : '') }; // кнопка ведёт на сайт с номером карты — скидка применится сама // cs — метка сайта: сайт сам подхватит номер карты
+    const card = cs => { const c = cardFor(ch, u.userId || u.chatId, u.name); if (cs && ctx.claimCard) ctx.claimCard(cs, c.code); if (ch === 'telegram') { const kb = (SITE || SHOP_URL) ? { inline_keyboard: [[{ text: '🛒 Вернуться в магазин', url: (SITE || SHOP_URL) + '/#card/' + encodeURIComponent(c.code) }]] } : undefined; return cardPic(c.code).then(f => f ? sendPhotoFile(u.chatId, f, cardText(c), kb, 'card.png') : send(ch, u.chatId, cardText(c), CARD_IMG, kb)) } return say(cardText(c), ch === 'telegram' ? CARD_IMG : '') }; // кнопка ведёт на сайт с номером карты — скидка применится сама // cs — метка сайта: сайт сам подхватит номер карты
     if (sm) { // переход по ссылке: параметр после start решает, что показать
       if (key === 'card') return card();
       if (key && /^card_[a-f0-9]{12,40}$/.test(key)) return card(key.slice(5));
