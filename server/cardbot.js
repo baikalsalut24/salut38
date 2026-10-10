@@ -109,8 +109,8 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     jpost(TG_API + '/bot' + TG + '/answerCallbackQuery', { callback_query_id: q.id });
     if (ctx.subs) ctx.subs.touch(q.from && q.from.id || chat, { name: q.from && q.from.first_name }, TG);
     const d = q.data;
-    if (/^s[onfpcydz]:/.test(d) && ctx.substAnswer) { // замена товара: so утвердить, sn следующая, sf/sp список, sc выбор, sy подтвердить, sd/sz удаление
-      const [k, oid, cid, arg] = d.split(':'), act = { so: 'ok', sn: 'next', sf: 'self', sp: 'list', sc: 'pick', sy: 'yes', sd: 'del', sz: 'delyes' }[k];
+    if (/^s[onfpcydzabr]:/.test(d) && ctx.substAnswer) { // замена товара: so утвердить, sn следующая, sf/sp список, sc выбор, sy подтвердить, sd/sz удаление
+      const [k, oid, cid, arg] = d.split(':'), act = { so: 'ok', sn: 'next', sf: 'self', sp: 'list', sc: 'pick', sy: 'yes', sd: 'del', sz: 'delyes', sa: 'all', sb: 'allyes', sr: 'back' }[k];
       const res = ctx.substAnswer(act, oid, cid, chat, arg), mid = q.message && q.message.message_id, ed = (m, b) => mid && jpost(TG_API + '/bot' + TG + '/' + m, { chat_id: chat, message_id: mid, ...b });
       if (res && typeof res === 'object' && res.list && q.message.text !== undefined && !q.message.photo) return ed('editMessageText', { text: res.text, ...(res.html ? { parse_mode: 'HTML', disable_web_page_preview: true } : {}), reply_markup: res.kb });
       if (mid) ed('editMessageReplyMarkup', { reply_markup: { inline_keyboard: [] } });

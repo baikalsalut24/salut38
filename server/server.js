@@ -159,6 +159,8 @@ function view(o, role) {
   const v = { ...o, next: nextFor(role, o.status) };
   v.items = o.items.map(i => ({ ...i, cat: catOf(i.sku)[0] || '' }));
   if (o.subst && o.subst.length) v.subst = o.subst.map(c => ({ ...c, a: prodInfo(c.sku, c.name, c.price), b: c.offer ? prodInfo(c.offer.sku, c.offer.name, c.offer.price) : null }));
+  if (o.subst && o.subst.length && M.includes(role)) { v.rlink = o.rt ? APP_BASE() + '/r/' + o.rt : ''; v.rp = o.rp ? { sentAt: o.rp.sentAt || '', due: o.rp.due || '', rem: o.rp.rem || 0, cold: !!o.rp.cold } : null }
+  v.site = SITE_BASE();
   if (o.notify) v.notify = { channel: o.notify.channel, email: o.notify.email || '', linked: !!o.notify.linked };
   if (M.includes(role) && o.promo) { const p = findPromo(o.promo), base = o.items.reduce((s, i) => s + i.sum, 0); v.promoInfo = p ? { state: o.discount > 0 ? 'applied' : promoState(p), kind: p.kind, type: p.type, value: p.value, discount: o.discount > 0 ? o.discount : promoDiscount(p, base) } : { state: 'unknown' } }
   if (role === 'storekeeper') { delete v.consentAt; delete v.notify; delete v.pay; delete v.paid; delete v.discountNote; delete v.phone; delete v.address; delete v.name; delete v.comment; delete v.promo; v.items = o.items.map(i => ({ ...i })); }
@@ -283,17 +285,53 @@ const catName = sku => catOf(sku)[0] || '';
 function prodBlock(mark, sku, name, price) { return mark + ' · ' + hx(catName(sku)) + '\n' + pLink(name, sku) + (facts(sku) ? '\n<i>' + facts(sku) + '</i> · ' : '\n') + money(price) }
 const endedBlock = c => prodBlock('❌ Закончился', c.sku, c.name, c.price);
 const offerBlock = of => prodBlock('✅ Предложение автозамены', of.sku, of.name, of.price);
-const SUBST_KB = (o, c) => { const id = o.id + ':' + c.id, del = [{ text: '✖ Удалить из заказа', callback_data: 'sd:' + id }];
-  return { inline_keyboard: c.autoOff ? [[{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + id }], del]
-    : [[{ text: '✅ Утвердить замену', callback_data: 'so:' + id }], [{ text: '🔄 Другой вариант', callback_data: 'sn:' + id }], [{ text: '🔍 Выбрать самостоятельно', callback_data: 'sf:' + id }], del] } };
 function orderLink(o) { if (!o.vt) { o.vt = crypto.randomBytes(12).toString('hex'); persist() } return APP_BASE() + '/o/' + o.vt }
 const ORDER_KB = o => ({ inline_keyboard: [[{ text: '📄 Состав заказа', url: orderLink(o) }]] });
-function sendOffer(o, c, remind) { // клиенту в Telegram: что закончилось и чем предлагаем заменить; после трёх нажатий «Другой вариант» остаются «выбрать самостоятельно» и «удалить»
-  const of = c.offer; if (!of && !c.autoOff) return false; const chat = chatOf(o); if (!chat || !BOT) { c.noChat = true; return false }
-  const pre = remind ? '⏰ <b>Ждём вашего решения</b> · заказ № ' + hx(o.id) + '\n\n' : '<b>Заказ № ' + hx(o.id) + '</b>\n\n';
-  const text = pre + endedBlock(c) + '\n\n' + (of ? offerBlock(of) : 'Автоматический подбор закончился. Выберите товар самостоятельно из категории «' + hx(catName(c.sku)) + '» или удалите позицию из заказа.');
-  BOT.send('telegram', chat, text, of ? imgUrl(of.img) : '', SUBST_KB(o, c), true);
-  c.sentAt = new Date().toISOString(); c.noChat = false; if (!remind) { c.rem = 0; c.remAt = ''; c.cold = false } return true;
+/* Все замены заказа клиент решает на одной странице /r/<код>. В чат: приглашение (через 3 минуты после первой «Закончился»), до 3 напоминаний, итог */
+const BATCH_MS = 3 * 60e3;
+const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c };
+const ended = n => 'закончил' + plural(n, 'ась', 'ись', 'ись') + ' ' + n + ' ' + plural(n, 'позиция', 'позиции', 'позиций');
+function replLink(o) { if (!o.rt) { o.rt = crypto.randomBytes(12).toString('hex'); persist() } return APP_BASE() + '/r/' + o.rt }
+const isOpen = c => c.st === 'wait' || c.st === 'manual';
+const liveCases = o => (o.subst || []).filter(c => c.st !== 'cancel' && !c.supDone); // замены текущей партии (ещё не переданы поставщику)
+const canAll = c => c.st === 'wait' && c.offer && !c.autoOff && !c.supDone;
+const shortOf = (sku, price) => hx(catName(sku)) + (facts(sku) ? ' · ' + facts(sku) : '') + ' · ' + money(price);
+const endedLine = c => '❌ ' + pLink(c.name, c.sku) + ' · ' + shortOf(c.sku, c.price);
+function replKb(o) { const r = [[{ text: '📋 Открыть замены', url: replLink(o) }]]; const n = liveCases(o).filter(canAll).length; if (n) r.push([{ text: '✅ Утвердить все предложенные' + (n > 1 ? ' (' + n + ')' : ''), callback_data: 'sa:' + o.id }]); return { inline_keyboard: r } }
+function replState(o) { const l = liveCases(o), open = l.filter(isOpen).length; return { all: l.length, open, done: l.length - open } }
+function inviteText(o, ids) { // ids — новые позиции для «закончилась ещё»; без ids — все нерешённые
+  const st = replState(o), l = ids ? liveCases(o).filter(c => ids.includes(c.id)) : liveCases(o).filter(isOpen), n = l.length;
+  const head = ids ? '<b>Заказ № ' + hx(o.id) + '</b>\nК сожалению, ' + ended(n).replace(/^(\S+) (\d+)/, '$1 ещё $2') + '. ' + (n > 1 ? 'Замены добавлены' : 'Замена добавлена') + ' на ту же страницу.'
+    : '<b>Заказ № ' + hx(o.id) + '</b>\nК сожалению, ' + ended(n) + '. Мы уже подобрали ' + (n > 1 ? 'замены, их можно посмотреть и согласовать одним списком.' : 'замену, её можно посмотреть и согласовать по ссылке.');
+  return head + '\n\n' + l.map(endedLine).join('\n') + '\n\n<i>Решено: ' + st.done + ' из ' + st.all + '</i>';
+}
+function flushRepl() { // через 3 минуты после первой «Закончился» — одно сообщение со ссылкой на страницу замен
+  const now = Date.now(); let ch = false;
+  for (const o of Object.values(orders)) {
+    const rp = o.rp; if (!rp || !rp.due || Date.parse(rp.due) > now) continue;
+    delete rp.due; ch = true;
+    const fresh = (o.subst || []).filter(c => isOpen(c) && !c.ann); if (!fresh.length) continue;
+    fresh.forEach(c => { c.ann = true }); const chat = chatOf(o), more = !!rp.sentAt && replState(o).all > fresh.length, n = fresh.length;
+    if (chat && BOT) {
+      BOT.send('telegram', chat, inviteText(o, more ? fresh.map(c => c.id) : null), '', replKb(o), true);
+      rp.sentAt = new Date().toISOString(); rp.rem = 0; rp.remAt = ''; rp.cold = false; rp.doneSent = false;
+      (o.subst || []).forEach(c => { if (isOpen(c)) { c.cold = false; c.noChat = false } });
+      histAdd(o, 'система', 'Клиенту отправлена ссылка на страницу замен: ' + ended(n));
+      alertText('📦 Заказ № ' + o.id + ': ' + ended(n) + '. Клиенту отправлена ссылка на страницу замен, ждём решения.');
+    } else {
+      fresh.forEach(c => { c.noChat = true });
+      alertText('📞 ЗВОНИТЬ ВРУЧНУЮ · заказ № ' + o.id + ': ' + ended(n) + ', клиент не в боте. Телефон: ' + o.phone + '. Ссылку на страницу замен можно отправить в любой мессенджер: ' + replLink(o));
+    }
+  }
+  if (ch) persist();
+}
+setInterval(flushRepl, 20e3).unref();
+function checkDone(o) { // все позиции решены — итог клиенту и сотрудникам (один раз)
+  const st = replState(o), rp = o.rp; if (!st.all || st.open || !rp || rp.doneSent) return;
+  rp.doneSent = true; if (rp.due) delete rp.due; const l = liveCases(o);
+  const lines = l.map(c => c.st === 'ok' && c.final ? '❌ ' + pLink(c.name, c.sku) + '\n✅ ' + pLink(c.final.name, c.final.sku) + ' · ' + shortOf(c.final.sku, c.final.price) : c.st === 'removed' ? '✖ ' + pLink(c.name, c.sku) + ' — удалено из заказа' : '✅ ' + pLink(c.name, c.sku) + ' — решено с оператором').join('\n\n');
+  if (rp.sentAt) clientMsg(o, '✅ <b>Все замены согласованы</b> · заказ № ' + hx(o.id) + '\n\n' + lines + '\n\nАктуальный состав заказа можно посмотреть и скачать в PDF.', ORDER_KB(o));
+  alertText('✅ Заказ № ' + o.id + ': все замены решены. Сумма: ' + money(o.total) + '. Уведомите поставщика — кнопка «Поставщик уведомлён» в заказе.');
 }
 function clientMsg(o, text, kb) { const chat = chatOf(o); if (chat && BOT) BOT.send('telegram', chat, text, '', kb, true) }
 const supNeed = (c, kind) => { c.sup = { kind, at: new Date().toISOString() }; c.supDone = false }; // вручную передаём заказы поставщику — нужно сообщить ему об изменении
@@ -315,77 +353,100 @@ function selfList(o, c, page) { // весь список товаров из к�
   return { text: '<b>Выберите замену</b>\n' + endedBlock(c) + '\n\n' + (l.length ? lines + '\n\n<i>Категория «' + hx(cs[0] || '') + '» · от цены чуть ниже вашей · стр. ' + (page + 1) + ' из ' + pages + '</i>' : 'В этой категории сейчас нет подходящих товаров. Можно удалить позицию из заказа или написать нам сюда, оператор поможет.'), kb: { inline_keyboard: rows }, list: true, html: true };
 }
 function removeItem(o, c, by) {
-  if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Позиция уже обработана' };
+  if (!c || !isOpen(c) || c.supDone) return { error: 'Позиция уже обработана' };
   const i = o.items.findIndex(x => x.sku === c.sku); if (i < 0) return { error: 'Позиции уже нет в заказе' };
-  o.items.splice(i, 1); recalcOrder(o); c.st = 'removed'; c.by = by; c.doneAt = new Date().toISOString(); if (!o.items.length) o.supCancel = { at: c.doneAt, done: false }; // поставщику сообщаем только если заказ опустел целиком
-  histAdd(o, by, 'Позиция «' + c.name + '» удалена из заказа (' + by + '). Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString(); persist();
-  clientMsg(o, '<b>Позиция удалена</b> из заказа № ' + hx(o.id) + ':\n' + pLink(c.name, c.sku) + '\n\nАктуальный состав заказа можно посмотреть и скачать в PDF.', ORDER_KB(o));
-  alertText('✖ Заказ № ' + o.id + ': «' + c.name + '» удалена из заказа (' + by + '). ' + (o.items.length ? 'Сумма: ' + money(o.total) + '.' : 'В заказе не осталось позиций! Заказ отменён клиентом полностью — уведомите поставщика (список «Уведомить поставщика»).'));
+  o.items.splice(i, 1); recalcOrder(o); c.st = 'removed'; c.by = by; c.doneAt = new Date().toISOString(); if (!o.items.length) o.supCancel = { at: c.doneAt, done: false }; // поставщику об удалении сообщаем только если заказ опустел целиком
+  histAdd(o, by, 'Позиция «' + c.name + '» удалена из заказа (' + by + '). Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString();
+  if (!o.items.length) alertText('✖ Заказ № ' + o.id + ': в заказе не осталось позиций! Заказ отменён клиентом полностью — уведомите поставщика (список «Уведомить поставщика»).');
+  checkDone(o); persist();
   return { ok: true };
 }
 function startOos(o, sku, by) {
   const it = o.items.find(i => i.sku === sku); if (!it) return { error: 'Нет такой позиции' };
   if (!['new', 'confirmed', 'picking'].includes(o.status)) return { error: 'Замена доступна, пока заказ не собран' };
-  o.subst = o.subst || []; if (o.subst.some(c => c.sku === sku && (c.st === 'wait' || c.st === 'manual'))) return { error: 'По этой позиции замена уже предлагается' };
+  o.subst = o.subst || []; if (o.subst.some(c => c.sku === sku && isOpen(c))) return { error: 'По этой позиции замена уже предлагается' };
+  if (o.subst.some(c => c.st === 'ok' && c.final && c.final.sku === sku && !c.supDone)) return { error: 'Это уже замена. Нажмите «Изменить» у этой позиции в списке замен' };
   const k = cat[sku] || (cat[sku] = {}); k.oos = new Date(Date.now() + OOS_DAYS * 864e5).toISOString(); k.by = by; k.at = new Date().toISOString(); persistCat();
   const c = { id: String((o.subst.reduce((m, x) => Math.max(m, +x.id || 0), 0)) + 1), sku, name: it.name, qty: it.qty, price: it.price, tried: [], st: 'wait', at: new Date().toISOString() };
   o.subst.push(c);
   const off = suggestFor(sku, [...o.items.map(i => i.sku)]);
-  if (off) { c.offer = off; c.tried.push(off.sku); histAdd(o, by, 'Закончился: ' + it.name + '. Предложена замена: ' + off.name); sendOffer(o, c) }
-  else { c.autoOff = true; histAdd(o, by, 'Закончился: ' + it.name + '. Подходящей замены автоматически не нашлось'); if (!sendOffer(o, c)) c.st = 'manual' }
+  if (off) { c.offer = off; c.tried.push(off.sku); histAdd(o, by, 'Закончился: ' + it.name + '. Предложена замена: ' + off.name) }
+  else { c.autoOff = true; histAdd(o, by, 'Закончился: ' + it.name + '. Подходящей замены автоматически не нашлось — клиент выберет сам') }
+  c.noChat = !chatOf(o); if (c.noChat && !off) c.st = 'manual';
+  const rp = o.rp || (o.rp = {}); if (!rp.due) rp.due = new Date(Date.now() + BATCH_MS).toISOString(); rp.doneSent = false; replLink(o);
   o.updatedAt = new Date().toISOString(); persist();
-  alertText('📦 В заказе № ' + o.id + ' закончился товар «' + it.name + '». ' + (c.offer ? (c.noChat ? 'ЗВОНИТЬ ВРУЧНУЮ: клиент не в боте — предложите замену «' + c.offer.name + '» по телефону: ' + o.phone : 'Клиенту отправлена замена «' + c.offer.name + '», ждём ответ.') : 'Автозамены нет — свяжитесь с клиентом: ' + o.phone));
   return { ok: true };
 }
 function acceptSubst(o, c, by) {
-  if (!c || c.st !== 'wait' || !c.offer) return { error: 'Замена уже обработана' };
+  if (!c || c.st !== 'wait' || !c.offer || c.supDone) return { error: 'Замена уже обработана' };
   const i = o.items.findIndex(x => x.sku === c.sku); if (i < 0) return { error: 'Позиции уже нет в заказе' };
   const of = c.offer; o.items[i] = { sku: of.sku, name: of.name, qty: c.qty, price: of.price, sum: Math.round(of.price * c.qty * 100) / 100, picked: false };
   recalcOrder(o); c.st = 'ok'; c.final = of; c.by = by; c.doneAt = new Date().toISOString(); c.self = false; supNeed(c, 'replace');
-  histAdd(o, by, 'Замена утверждена (' + by + '): ' + c.name + ' → ' + of.name + '. Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString(); persist();
-  clientMsg(o, '✅ <b>Готово!</b> Заменили в заказе № ' + hx(o.id) + ':\n\n❌ ' + pLink(c.name, c.sku) + '\n✅ ' + pLink(of.name, of.sku) + '\n\nАктуальный состав заказа можно посмотреть и скачать в PDF.', ORDER_KB(o));
-  alertText('✅ Заказ № ' + o.id + ': замена «' + c.name + '» → «' + of.name + '» утверждена (' + by + '). Сумма: ' + money(o.total));
+  histAdd(o, by, 'Замена утверждена (' + by + '): ' + c.name + ' → ' + of.name + '. Сумма заказа: ' + money(o.total)); o.updatedAt = new Date().toISOString();
+  checkDone(o); persist();
   return { ok: true };
 }
+function undoSubst(o, c, by) { // «изменить» / «вернуть»: позиция снова ждёт решения, пока поставщик не уведомлён
+  if (!c || c.supDone) return { error: 'Поставщик уже уведомлён — изменить нельзя. Напишите нам в бота.' };
+  if (c.st !== 'ok' && c.st !== 'removed') return { error: 'Нечего менять' };
+  const orig = { sku: c.sku, name: c.name, qty: c.qty, price: c.price, sum: Math.round(c.price * c.qty * 100) / 100, picked: false };
+  if (c.st === 'ok') { const i = c.final ? o.items.findIndex(x => x.sku === c.final.sku) : -1; if (i >= 0) o.items[i] = orig; else o.items.push(orig); c.offer = c.final; c.final = null }
+  else { o.items.push(orig); if (o.supCancel && !o.supCancel.done) delete o.supCancel; if (!c.offer) c.autoOff = true }
+  recalcOrder(o); c.st = 'wait'; c.sup = null; c.supDone = false; c.chosen = false; c.by = '';
+  if (o.rp) o.rp.doneSent = false;
+  histAdd(o, by, 'Решение по «' + c.name + '» отменено (' + by + '), позиция снова ждёт замены'); o.updatedAt = new Date().toISOString(); persist();
+  return { ok: true };
+}
+function acceptAll(o, by) { let n = 0; for (const c of (o.subst || []).filter(canAll)) if (!acceptSubst(o, c, by).error) n++; return n }
+function pickSubst(o, c, sku, by) { // клиент или менеджер выбрал товар сам
+  if (!c || !isOpen(c) || c.supDone) return { error: 'Позиция уже обработана' };
+  const b = BASE.find(x => x.sku === sku); if (!b || !visibleNow(b)) return { error: 'Этот товар сейчас недоступен, выберите другой' };
+  if (o.items.some(i => i.sku === sku)) return { error: 'Этот товар уже есть в заказе' };
+  c.offer = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' }; if (!c.tried.includes(b.sku)) c.tried.push(b.sku); c.chosen = true; c.st = 'wait'; c.autoOff = false;
+  return acceptSubst(o, c, by);
+}
 function nextSubst(o, c, by, sku) {
-  if (!c || (c.st !== 'wait' && c.st !== 'manual')) return { error: 'Замена уже обработана' };
+  if (!c || !isOpen(c) || c.supDone) return { error: 'Замена уже обработана' };
   const cl = by === 'клиент'; let off = null;
   if (sku) { const b = BASE.find(x => x.sku === sku); if (!b) return { error: 'Товар не найден' }; if (!visibleNow(b)) return { error: 'Этот товар сейчас скрыт или закончился' }; off = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' } }
   else if (cl) { c.nexts = (c.nexts || 0) + 1; if (c.nexts < 4) off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried]) }
   else off = suggestFor(c.sku, [...o.items.map(i => i.sku), ...c.tried]);
   if (!off) {
-    if (cl) { c.autoOff = true; c.offer = null; c.st = 'wait'; histAdd(o, by, 'Автозамены для «' + c.name + '» закончились — клиенту остался самостоятельный выбор или удаление'); o.updatedAt = new Date().toISOString(); sendOffer(o, c); persist(); alertText('🔄 Заказ № ' + o.id + ': клиент перебрал автозамены для «' + c.name + '». Он выбирает сам или удалит позицию.'); return { ok: true } }
+    if (cl) { c.autoOff = true; c.offer = null; c.st = 'wait'; histAdd(o, by, 'Автозамены для «' + c.name + '» закончились — клиенту остался самостоятельный выбор или удаление'); o.updatedAt = new Date().toISOString(); persist(); return { ok: true } }
     c.st = 'manual'; c.offer = null; histAdd(o, by, 'Подходящих замен для «' + c.name + '» больше нет — нужна связь с клиентом'); o.updatedAt = new Date().toISOString(); persist(); return { ok: true } }
-  c.offer = off; c.st = 'wait'; c.self = false; c.autoOff = false; c.tried.push(off.sku); histAdd(o, by, 'Другая замена для «' + c.name + '»: ' + off.name); o.updatedAt = new Date().toISOString();
-  const sent = sendOffer(o, c); persist();
-  if (cl) alertText('🔄 Заказ № ' + o.id + ': клиент просит другую замену для «' + c.name + '». Предложено: «' + off.name + '».');
-  return { ok: true, sent };
+  c.offer = off; c.st = 'wait'; c.self = false; c.autoOff = false; c.tried.push(off.sku); histAdd(o, by, 'Другая замена для «' + c.name + '»: ' + off.name); o.updatedAt = new Date().toISOString(); persist();
+  return { ok: true };
 }
 const irkHour = () => new Date(Date.now() + 8 * 3600e3).getUTCHours();
-function remindSubst() { // раз в 60 минут с 9:00 до 21:00 по Иркутску, максимум 3 напоминания
+function remindSubst() { // раз в 60 минут с 9:00 до 21:00 по Иркутску, максимум 3 напоминания на заказ
   const h = irkHour(); if (h < 9 || h >= 21) return; let ch = false;
-  for (const o of Object.values(orders)) for (const c of o.subst || []) {
-    if (c.st !== 'wait' || c.cold || c.noChat || !(c.offer || c.autoOff) || !chatOf(o)) continue;
-    const last = Date.parse(c.remAt || c.sentAt || c.at); if (!(Date.now() - last >= 3600e3)) continue;
-    if ((c.rem || 0) >= 3) { c.cold = true; c.coldAt = new Date().toISOString(); histAdd(o, 'система', 'Клиент не ответил на 3 напоминания о замене «' + c.name + '». Нужен звонок оператора'); o.updatedAt = c.coldAt; ch = true;
-      alertText('🥶 Заказ № ' + o.id + ': клиент не ответил на замену «' + c.name + '» после 3 напоминаний. Позвоните: ' + o.phone); continue }
-    if (sendOffer(o, c, true)) { c.rem = (c.rem || 0) + 1; c.remAt = new Date().toISOString(); ch = true }
+  for (const o of Object.values(orders)) {
+    const rp = o.rp; if (!rp || !rp.sentAt || rp.cold || rp.due) continue;
+    const st = replState(o); if (!st.open || !chatOf(o)) continue;
+    if (!(Date.now() - Date.parse(rp.remAt || rp.sentAt) >= 3600e3)) continue;
+    if ((rp.rem || 0) >= 3) { rp.cold = true; rp.coldAt = new Date().toISOString(); liveCases(o).filter(isOpen).forEach(c => { c.cold = true }); histAdd(o, 'система', 'Клиент не ответил на 3 напоминания о заменах. Нужен звонок оператора'); o.updatedAt = rp.coldAt; ch = true;
+      alertText('🥶 Заказ № ' + o.id + ': клиент не ответил по заменам после 3 напоминаний (осталось решить ' + st.open + ' из ' + st.all + '). Позвоните: ' + o.phone); continue }
+    clientMsg(o, '⏰ <b>Ждём решения по заменам</b> · заказ № ' + hx(o.id) + '\nОсталось решить: <b>' + st.open + ' из ' + st.all + '</b>.', replKb(o));
+    rp.rem = (rp.rem || 0) + 1; rp.remAt = new Date().toISOString(); ch = true;
   }
   if (ch) persist() }
 setInterval(remindSubst, 5 * 60e3).unref();
+for (const o of Object.values(orders)) { // заказы, где замены уже ушли старыми карточками в чат: переводим на страницу без повторной отправки
+  const old = (o.subst || []).filter(c => isOpen(c) && c.sentAt && !c.ann); if (!old.length || (o.rp && o.rp.sentAt)) continue;
+  o.rp = { sentAt: old[0].sentAt, rem: Math.max(...old.map(c => c.rem || 0)), remAt: old[0].remAt || '' }; old.forEach(c => { c.ann = true });
+}
 function substAnswer(act, orderId, caseId, chat, arg) { // нажатия кнопок клиента в боте
-  const o = orders[orderId], c = o && (o.subst || []).find(x => x.id === caseId); if (!c || chatOf(o) !== String(chat)) return 'Это предложение уже недоступно.';
-  if (c.st !== 'wait') return 'Это предложение уже обработано.';
-  if (act === 'self' || act === 'list') { if (!c.self) { c.self = true; histAdd(o, 'клиент', 'Клиент выбирает замену для «' + c.name + '» самостоятельно'); persist() } return selfList(o, c, act === 'list' ? arg : 0) }
-  if (act === 'pick') { const b = BASE.find(x => x.sku === arg); if (!b || !visibleNow(b)) return 'Этот товар недоступен, выберите другой.'; const pr = priceOf(b.sku, b.price);
-    return { text: '<b>Заменить на выбранный товар?</b>\n\n' + endedBlock(c) + '\n\n' + prodBlock('✅ Ваш выбор', b.sku, b.name, pr), photo: imgUrl(FEED.im[b.sku] || b.img), html: true,
-      kb: { inline_keyboard: [[{ text: '✅ Да, заменить', callback_data: 'sy:' + o.id + ':' + c.id + ':' + b.sku }], [{ text: '↩ К списку', callback_data: 'sp:' + o.id + ':' + c.id + ':0' }]] } } }
-  if (act === 'yes') { const b = BASE.find(x => x.sku === arg); if (!b || !visibleNow(b)) return 'Этот товар недоступен, выберите другой.';
-    c.offer = { sku: b.sku, name: b.name, price: priceOf(b.sku, b.price), img: FEED.im[b.sku] || b.img || '' }; if (!c.tried.includes(b.sku)) c.tried.push(b.sku); c.chosen = true;
-    const r = acceptSubst(o, c, 'клиент'); return r.error ? r.error : ''; }
-  if (act === 'del') return { text: '<b>Удалить из заказа?</b>\n\n' + endedBlock(c), html: true, kb: { inline_keyboard: [[{ text: '✖ Да, удалить', callback_data: 'sz:' + o.id + ':' + c.id }], [{ text: '↩ Нет, вернуться', callback_data: 'sp:' + o.id + ':' + c.id + ':0' }]] } };
-  if (act === 'delyes') { const r = removeItem(o, c, 'клиент'); return r.error ? r.error : ''; }
-  const r = act === 'ok' ? acceptSubst(o, c, 'клиент') : nextSubst(o, c, 'клиент'); return r.error ? r.error : '';
+  const o = orders[orderId]; if (!o || chatOf(o) !== String(chat)) return 'Это предложение уже недоступно.';
+  if (act === 'all' || act === 'allyes' || act === 'back') { // «Утвердить все предложенные» прямо из чата
+    if (act === 'allyes') acceptAll(o, 'клиент');
+    const l = liveCases(o).filter(canAll);
+    if (act === 'all' && l.length) return { list: true, html: true, text: '<b>Утвердить все предложенные замены?</b> · заказ № ' + hx(o.id) + '\n\n' + l.map(c => '❌ ' + pLink(c.name, c.sku) + '\n✅ ' + pLink(c.offer.name, c.offer.sku) + ' · ' + shortOf(c.offer.sku, c.offer.price)).join('\n\n'),
+      kb: { inline_keyboard: [[{ text: '✅ Да, утвердить все', callback_data: 'sb:' + o.id }], [{ text: '↩ Назад', callback_data: 'sr:' + o.id }], [{ text: '📋 Открыть замены', url: replLink(o) }]] } };
+    const st = replState(o);
+    return { list: true, html: true, text: '<b>Заказ № ' + hx(o.id) + '</b>\n' + (st.open ? 'Замены можно посмотреть и согласовать по ссылке.' : 'Все замены решены, спасибо!') + '\n\n<i>Решено: ' + st.done + ' из ' + st.all + '</i>', kb: replKb(o) };
+  }
+  // старые карточки в чате (до перехода на страницу замен)
+  return { text: 'Все замены по заказу № ' + o.id + ' теперь собраны на одной странице — откройте её по кнопке.', kb: { inline_keyboard: [[{ text: '📋 Открыть замены', url: replLink(o) }]] } };
 }
 const digits = s => String(s || '').replace(/\D/g, '').replace(/^8(?=\d{10}$)/, '7');
 for (const k in carts) if (Date.now() - Date.parse(carts[k].updatedAt) > 30 * 864e5) delete carts[k]; // брошенные корзины старше 30 дней убираем
@@ -511,12 +572,19 @@ async function api(req, res, url) {
     if (mm[2] === 'subst' && m === 'POST') { // действия менеджера по замене
       if (!isM) return send(res, 403, { error: 'Только менеджер' }); refreshFeed();
       if (b.action === 'supcancel') { if (!o.supCancel || o.supCancel.done) return send(res, 400, { error: 'Уведомлять не нужно' }); o.supCancel.done = true; o.supCancel.by = me.name; histAdd(o, me.name, 'Поставщик уведомлён об отмене заказа'); o.updatedAt = new Date().toISOString(); persist(); return send(res, 200, view(o, role)) }
+      if (b.action === 'supplierAll') { // одна кнопка на весь список замен заказа
+        if (liveCases(o).some(isOpen)) return send(res, 400, { error: 'Сначала подберите замены для всех позиций' });
+        const l = (o.subst || []).filter(c => c.sup && !c.supDone); if (!l.length) return send(res, 400, { error: 'Уведомлять не нужно' });
+        const at = new Date().toISOString(); l.forEach(c => { c.supDone = true; c.supAt = at; c.supBy = me.name });
+        histAdd(o, me.name, 'Поставщик уведомлён о заменах: ' + l.map(c => c.final ? c.final.name : c.name).join(', ')); o.updatedAt = at; persist(); return send(res, 200, view(o, role)) }
+      if (b.action === 'acceptAll') { acceptAll(o, me.name); return send(res, 200, view(o, role)) }
       const c = (o.subst || []).find(x => x.id === String(b.case)); if (!c) return send(res, 404, { error: 'Замена не найдена' });
       let r;
       if (b.action === 'accept') r = acceptSubst(o, c, me.name);
-      else if (b.action === 'next') r = nextSubst(o, c, me.name, b.sku ? clean(b.sku, 40) : '');
-      else if (b.action === 'done' || b.action === 'cancel') { if (c.st === 'ok' || c.st === 'done' || c.st === 'cancel') return send(res, 400, { error: 'Уже обработано' }); c.st = b.action === 'done' ? 'done' : 'cancel'; if (c.st === 'done') supNeed(c, 'manual'); histAdd(o, me.name, (b.action === 'done' ? 'Замена решена вручную: ' : 'Замена отменена: ') + c.name); o.updatedAt = new Date().toISOString(); persist(); r = { ok: true } }
+      else if (b.action === 'next') r = b.sku ? pickSubst(o, c, clean(b.sku, 40), me.name) : nextSubst(o, c, me.name, '');
+      else if (b.action === 'done' || b.action === 'cancel') { if (!isOpen(c)) return send(res, 400, { error: 'Уже обработано' }); c.st = b.action === 'done' ? 'done' : 'cancel'; c.by = me.name; if (c.st === 'done') supNeed(c, 'manual'); histAdd(o, me.name, (b.action === 'done' ? 'Замена решена вручную: ' : 'Замена отменена: ') + c.name); o.updatedAt = new Date().toISOString(); checkDone(o); persist(); r = { ok: true } }
       else if (b.action === 'remove') r = removeItem(o, c, me.name);
+      else if (b.action === 'undo') r = undoSubst(o, c, me.name);
       else if (b.action === 'supplier') { if (!c.sup || c.supDone) return send(res, 400, { error: 'Уведомлять не нужно' }); c.supDone = true; c.supAt = new Date().toISOString(); c.supBy = me.name; histAdd(o, me.name, 'Поставщик уведомлён об изменении: ' + c.name); o.updatedAt = c.supAt; persist(); r = { ok: true } }
       else return send(res, 400, { error: 'Неизвестное действие' });
       return r.error ? send(res, 400, r) : send(res, 200, view(o, role));
@@ -525,7 +593,7 @@ async function api(req, res, url) {
     if (m === 'POST' && mm[2] === 'status') {
       const to = b.status; if (!STATUS[to] || !(canMove(role, o.status, to) || (b.force === true && role === 'admin' && to !== o.status))) return send(res, 403, { error: 'Этот переход вам недоступен' });
       const note = clean(b.note, 300);
-      if (to !== 'cancelled' && to !== 'failed' && (o.subst || []).some(c => c.st === 'wait' || c.st === 'manual') && !note) return send(res, 400, { error: 'Есть позиция без утверждённой замены. Решите её или напишите комментарий, чтобы продолжить.' });
+      if (to !== 'cancelled' && to !== 'failed' && (o.subst || []).some(isOpen) && !note) return send(res, 400, { error: 'Есть позиция без утверждённой замены. Решите её или напишите комментарий, чтобы продолжить.' });
       if ((to === 'failed' || to === 'cancelled') && !note) return send(res, 400, { error: 'Укажите причину' });
       if (to === 'packed' && !isM && !o.items.every(i => i.picked)) return send(res, 400, { error: 'Отметьте все позиции собранными' });
       if (to === 'shipping') o.courierId = role === 'courier' ? me.id : (o.courierId || (users.find(u => u.id === b.courierId && u.role === 'courier') || {}).id || null);
@@ -733,6 +801,83 @@ function stat(req, res, url) {
   });
 }
 
+/* ---------- страница замен для клиента: /r/<код> ---------- */
+const PAGE_H = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex, nofollow', 'referrer-policy': 'no-referrer' };
+const PAGE_CSS = '*{box-sizing:border-box}body{margin:0;background:#F3F5FA;color:#10162a;font:16px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;padding-bottom:90px}a{color:#1a5fd0}.hh{background:#080C16;color:#fff;padding:14px 18px;font-weight:800;font-size:18px}.hh b{color:#FFD21F}.w{max-width:640px;margin:0 auto;padding:14px}'
+  + '.top{background:#fff;border-bottom:1px solid #dfe3ee;padding:12px 16px}.top h1{font-size:20px;margin:0}.pg{height:8px;background:#e4e8f2;border-radius:6px;margin-top:8px;overflow:hidden}.pg i{display:block;height:100%;background:#1F9D55;border-radius:6px}'
+  + '.rc{background:#fff;border:1px solid #dfe3ee;border-radius:14px;padding:12px 14px;margin-bottom:10px}.rc.ok{border-color:#bfe3cc;background:#f3fbf6}.rc.rm{background:#f6f7fa;color:#6b7390}.rc.lk{opacity:.85}.lb{font-weight:800;font-size:12px;letter-spacing:.02em}.x{color:#E5121B}.o{color:#1f7a45}small{display:block;color:#7a84a3;font-size:13px;margin:1px 0 6px}'
+  + '.a{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.a button,.a a.b{flex:1 1 30%;border:0;border-radius:10px;padding:11px 6px;font-weight:800;font-size:14px;background:#EEF1F8;color:#10162a;cursor:pointer;text-align:center;text-decoration:none}.a .p,.a a.b.p{background:#FFD21F}.lnk{background:none;border:0;color:#7a84a3;font-size:13px;padding:6px 0 0;cursor:pointer;text-decoration:underline}.lnk.r{color:#b3261e}'
+  + '.big{position:fixed;left:0;right:0;bottom:0;padding:10px 14px;background:rgba(243,245,250,.96);border-top:1px solid #dfe3ee}.big button,.big a{display:block;max-width:612px;margin:0 auto;width:100%;background:#FFD21F;border:0;border-radius:14px;padding:15px;font-weight:900;font-size:16px;color:#10162a;text-align:center;text-decoration:none;cursor:pointer}'
+  + '.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}.two>div{background:#fff;border:1px solid #dfe3ee;border-radius:12px;padding:10px;font-size:14px}.two img{width:100%;height:130px;object-fit:contain;background:#fff;border-radius:8px}.two b{display:block;margin:4px 0}.wk{background:#fff4d6;color:#7a4b00;border-radius:10px;padding:8px 10px;font-size:13px;margin:6px 0}'
+  + '.sl{display:flex;gap:10px;align-items:center}.sl img{width:64px;height:64px;object-fit:contain;border-radius:8px;background:#fff;flex:none}.sl>div{flex:1;min-width:0}.done{background:#E6F6EC;border:1px solid #bfe3cc;border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:18px;margin-bottom:10px}.done span{display:block;font-weight:400;font-size:14px;color:#52597a;margin-top:4px}.bk{display:inline-block;margin:4px 0 10px;font-weight:700;text-decoration:none}';
+const pA = (name, sku) => '<a href="' + SITE_BASE() + '/#p/' + encodeURIComponent(sku) + '" target="_blank" rel="noopener">«' + hx(name) + '»</a>';
+const shortH = (sku, price) => hx(catName(sku)) + (facts(sku) ? ' · ' + facts(sku) : '') + ' · <b>' + money(price) + '</b>';
+function replPage(req, res, url) {
+  if (limit('r' + ipOf(req), 120, 60e3)) { res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('Слишком много запросов') }
+  const parts = url.pathname.split('/'), t = String(parts[2] || '').replace(/[^a-f0-9]/gi, ''), o = t.length >= 16 && Object.values(orders).find(x => x.rt === t);
+  if (req.method === 'POST' && parts[3] === 'act') return replAct(req, res, o);
+  if (!o) { res.writeHead(404, PAGE_H); return res.end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Страница не найдена</title><body style="font-family:sans-serif;padding:30px">Страница замен не найдена. Проверьте ссылку или напишите нам в бота.</body>') }
+  refreshFeed();
+  const all = (o.subst || []).filter(c => c.st !== 'cancel'), live = liveCases(o), st = replState(o), base = '/r/' + o.rt;
+  const cv = url.searchParams.get('c'), sv = url.searchParams.get('s'), cc = all.find(x => x.id === (cv || sv));
+  let body = '';
+  if (cc && sv && isOpen(cc) && !cc.supDone) { // самостоятельный выбор: вся категория, от цены минус 30% по возрастанию
+    const cs = catOf(cc.sku), inO = o.items.map(i => i.sku), lo = cc.price * 0.7;
+    const l = BASE.filter(b => b.sku !== cc.sku && !inO.includes(b.sku) && visibleNow(b) && catOf(b.sku).some(x => cs.includes(x))).map(b => ({ b, pr: priceOf(b.sku, b.price) })).filter(x => x.pr > 0);
+    const up = l.filter(x => x.pr >= lo).sort((x, y) => x.pr - y.pr), down = l.filter(x => x.pr < lo).sort((x, y) => y.pr - x.pr);
+    body = '<a class="bk" href="' + base + '">← Все замены</a><div class="rc"><span class="lb x">❌ ЗАКОНЧИЛСЯ</span> ' + pA(cc.name, cc.sku) + '<small>' + shortH(cc.sku, cc.price) + '</small><div style="font-size:13px;color:#52597a">Выберите замену из категории «' + hx(cs[0] || '') + '». Сначала товары от цены чуть ниже вашей и дороже, в конце — дешевле.</div></div>'
+      + (up.concat(down).map(x => '<div class="rc sl">' + (imgUrl(FEED.im[x.b.sku] || x.b.img) ? '<img src="' + hx(imgUrl(FEED.im[x.b.sku] || x.b.img)) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<div>' + pA(x.b.name, x.b.sku) + '<small>' + shortH(x.b.sku, x.pr) + '</small><div class="a"><button class="p" data-a="pick" data-c="' + cc.id + '" data-s="' + hx(x.b.sku) + '">Выбрать</button></div></div></div>').join('') || '<div class="rc">В этой категории сейчас нет подходящих товаров. Можно удалить позицию из заказа или написать нам в бота.</div>');
+  } else if (cc && cv) { // карточка позиции крупно
+    const of = cc.st === 'ok' ? cc.final : cc.offer, img = x => imgUrl(FEED.im[x.sku] || x.img || (BASE.find(b => b.sku === x.sku) || {}).img);
+    const box = (lab, cls, x, pr) => '<div><span class="lb ' + cls + '">' + lab + '</span>' + (img(x) ? '<img src="' + hx(img(x)) + '" alt="" onerror="this.remove()">' : '') + '<b>' + pA(x.name, x.sku) + '</b>' + hx(catName(x.sku)) + (facts(x.sku) ? '<br>' + facts(x.sku).split(' · ').join('<br>') : '') + '<br><b>' + money(pr) + '</b></div>';
+    body = '<a class="bk" href="' + base + '">← Все замены</a><div class="two">' + box('❌ ЗАКОНЧИЛСЯ', 'x', cc, cc.price) + (of ? box(cc.st === 'ok' ? '✅ ЗАМЕНА' : '✅ ПРЕДЛОЖЕНИЕ', 'o', of, of.price) : '<div style="display:flex;align-items:center;color:#7a84a3">Автоподбор закончился — выберите товар самостоятельно</div>') + '</div>'
+      + (of && of.weaker && cc.st !== 'ok' ? '<div class="wk">Товаров с такими же или лучшими характеристиками сейчас нет — это ближайший вариант.</div>' : '') + caseActs(cc, base, true);
+  } else {
+    const fin = st.all > 0 && !st.open;
+    body = (fin ? '<div class="done">✅ Все замены согласованы<span>Спасибо! Мы передали решение в работу. Пока заказ не передан поставщику, решение можно изменить.</span></div>' : '')
+      + all.map(c => caseCard(c, base)).join('') + (fin ? '<div class="a"><a class="b p" href="' + orderLink(o) + '">📄 Состав заказа</a></div>' : '');
+  }
+  const n = live.filter(canAll).length, bar = !cv && !sv && n ? '<div class="big"><button data-a="all">✅ Утвердить все предложенные (' + n + ')</button></div>' : '';
+  const js = '<script>const B=' + JSON.stringify(base) + ';document.addEventListener("click",async e=>{const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a;'
+    + 'if(a==="del"&&!confirm("Удалить позицию из заказа?"))return;if(a==="all"&&!confirm("Утвердить все предложенные замены?"))return;b.disabled=true;'
+    + 'try{const r=await fetch(B+"/act",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({a,c:b.dataset.c||"",s:b.dataset.s||""})});const j=await r.json().catch(()=>({}));if(!r.ok){alert(j.error||"Не получилось, попробуйте ещё раз");b.disabled=false;return}location.href=B}catch(x){alert("Нет связи, попробуйте ещё раз");b.disabled=false}})</script>';
+  const html = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Замены · заказ № ' + hx(o.id) + '</title><style>' + PAGE_CSS + '</style></head><body><div class="hh">Байкал <b>Салют</b></div>'
+    + '<div class="top"><h1>Заказ № ' + hx(o.id) + '</h1>Решено <b>' + st.done + ' из ' + st.all + '</b><div class="pg"><i style="width:' + (st.all ? Math.round(st.done / st.all * 100) : 100) + '%"></i></div></div><div class="w">' + body + '</div>' + bar + js + '</body></html>';
+  res.writeHead(200, PAGE_H); res.end(html);
+}
+function caseActs(c, base, big) {
+  if (c.supDone) return '<div style="color:#7a84a3;font-size:13px;margin-top:6px">Передано в работу — изменить можно только через оператора.</div>';
+  if (c.st === 'ok') return '<button class="lnk" data-a="undo" data-c="' + c.id + '">Изменить решение</button>';
+  if (c.st === 'removed') return '<button class="lnk" data-a="undo" data-c="' + c.id + '">Вернуть позицию</button>';
+  if (c.st === 'done') return '';
+  const self = '<a class="b" href="' + base + '?s=' + c.id + '">🔍 Выбрать самостоятельно</a>', del = '<button class="lnk r" data-a="del" data-c="' + c.id + '">✖ Удалить из заказа</button>';
+  if (!c.offer || c.autoOff) return '<div class="a">' + self.replace('class="b"', 'class="b p"') + '</div>' + del;
+  return '<div class="a"><button class="p" data-a="ok" data-c="' + c.id + '">✅ Утвердить</button><button data-a="next" data-c="' + c.id + '">🔄 Другой вариант</button>' + self + '</div>' + del + (big ? '' : ' &nbsp; <a class="lnk" href="' + base + '?c=' + c.id + '">Подробнее</a>');
+}
+function caseCard(c, base) {
+  const head = '<span class="lb x">❌ ЗАКОНЧИЛСЯ</span> ' + pA(c.name, c.sku) + '<small>' + shortH(c.sku, c.price) + '</small>';
+  if (c.st === 'ok' && c.final) return '<div class="rc ok' + (c.supDone ? ' lk' : '') + '">' + head + '<span class="lb o">✅ ЗАМЕНА УТВЕРЖДЕНА</span> ' + pA(c.final.name, c.final.sku) + '<small>' + shortH(c.final.sku, c.final.price) + '</small>' + caseActs(c, base) + '</div>';
+  if (c.st === 'removed') return '<div class="rc rm">' + head + '<b>✖ Удалено из заказа</b><br>' + caseActs(c, base) + '</div>';
+  if (c.st === 'done') return '<div class="rc ok">' + head + '<b>✅ Решено с оператором</b></div>';
+  const of = c.offer && !c.autoOff ? '<span class="lb o">✅ ПРЕДЛОЖЕНИЕ АВТОЗАМЕНЫ</span> ' + pA(c.offer.name, c.offer.sku) + '<small>' + shortH(c.offer.sku, c.offer.price) + '</small>' + (c.offer.weaker ? '<div class="wk">Товаров с такими же или лучшими характеристиками сейчас нет — это ближайший вариант.</div>' : '') : '<div style="font-size:14px;color:#52597a;margin-bottom:4px">Автоматический подбор закончился. Выберите товар самостоятельно или удалите позицию.</div>';
+  return '<div class="rc">' + head + of + caseActs(c, base) + '</div>';
+}
+async function replAct(req, res, o) {
+  if (!o) return send(res, 404, { error: 'Страница не найдена' });
+  if (limit('ra' + ipOf(req), 40, 60e3)) return send(res, 429, { error: 'Слишком много нажатий, подождите минуту' });
+  const b = await body(req).catch(() => ({})), a = String(b.a || ''); refreshFeed();
+  if (a === 'all') { acceptAll(o, 'клиент'); return send(res, 200, { ok: true }) }
+  const c = (o.subst || []).find(x => x.id === String(b.c || '')); if (!c) return send(res, 404, { error: 'Позиция не найдена' });
+  if (c.supDone) return send(res, 400, { error: 'Эта позиция уже передана в работу. Изменить можно через оператора — напишите нам в бота.' });
+  let r;
+  if (a === 'ok') r = acceptSubst(o, c, 'клиент');
+  else if (a === 'next') r = nextSubst(o, c, 'клиент');
+  else if (a === 'pick') { const sku = clean(b.s, 40); if (!catOf(sku).some(x => catOf(c.sku).includes(x))) return send(res, 400, { error: 'Выберите товар из той же категории' }); r = pickSubst(o, c, sku, 'клиент') }
+  else if (a === 'del') r = removeItem(o, c, 'клиент');
+  else if (a === 'undo') r = undoSubst(o, c, 'клиент');
+  else return send(res, 400, { error: 'Неизвестное действие' });
+  return r && r.error ? send(res, 400, r) : send(res, 200, { ok: true });
+}
 function orderPage(req, res, url) { // публичная страница состава заказа по длинной ссылке: /o/<код>
   if (limit('o' + ipOf(req), 60, 60e3)) { res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('Слишком много запросов') }
   const t = decodeURIComponent(url.pathname.slice(3)).replace(/[^a-f0-9]/gi, ''), o = t.length >= 16 && Object.values(orders).find(x => x.vt === t);
@@ -755,6 +900,7 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
       return await api(req, res, url);
     }
     if (url.pathname.startsWith('/o/') && req.method === 'GET') return orderPage(req, res, url);
+    if (url.pathname.startsWith('/r/')) return await replPage(req, res, url);
     stat(req, res, url);
   } catch (e) { console.error(e); if (!res.headersSent) send(res, 500, { error: 'server' }) }
 }).listen(PORT, () => { console.log('Байкал Салют: сервер заказов на порту ' + PORT); const ownerOf = o => { // чей заказ (id в Telegram): по привязке статусов или по личной карте клиента
@@ -764,4 +910,4 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
   SUBS = require('./subs')({ DATA, alert: alertText, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
   BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), cardDefaults: () => cardCfg, orders: () => orders, persist, statusText, irkToday, substAnswer }); BOT.start() });
 
-if (process.env.BS_TEST) module.exports = { view, orders, BASE, orderLink, startOos, substAnswer, remindSubst, setBot: b => { BOT = b }, cat };
+if (process.env.BS_TEST) module.exports = { view, orders, BASE, orderLink, startOos, substAnswer, remindSubst, flushRepl, replLink, acceptAll, setBot: b => { BOT = b }, cat };
