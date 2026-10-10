@@ -128,12 +128,14 @@ const SEES = { admin: null };
 /* ---------- промокоды и дисконтные карты ---------- */
 const normCode = s => String(s == null ? '' : s).replace(/[\u0000-\u001f\s]/g, '').toUpperCase().slice(0, 30);
 const TIER = t => t < 5000 ? 5 : t < 20000 ? 10 : t < 50000 ? 15 : t < 100000 ? 20 : t < 500000 ? 25 : 30; // система скидок по сумме заказа
-const promoDiscount = (p, total) => p.type === 'percent' ? Math.round(total * p.value / 100) : p.type === 'amount' ? Math.min(Math.round(p.value), total) : Math.round(total * TIER(total) / 100);
+const promoDiscount = (p, total) => p.min > 0 && total < p.min ? 0 : p.type === 'percent' ? Math.round(total * p.value / 100) : p.type === 'amount' ? Math.min(Math.round(p.value), total) : Math.round(total * TIER(total) / 100);
 const cleanSlug = v => { const t = String(v == null ? '' : v).trim().toLowerCase(); return t === '' ? '' : /^[a-z0-9_-]{2,40}$/.test(t) ? t : null }; // метка для ссылки на бота: t.me/бот?start=promo_МЕТКА
 const irkToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+const BOT_MIN = { 5: 0, 10: 5000, 15: 20000, 20: 50000, 25: 100000, 30: 500000 }; // как в таблице «скидки» в боте (и на InSales)
 for (const v of [5, 10, 15, 20, 25, 30]) { // старые промокоды из BotHelp: остаются рабочими; создаются, только если их ещё нет
   const code = 'БОТ' + String(v).padStart(2, '0');
-  if (!promos.some(x => x.code === code || (x.aliases || []).includes(code))) { promos.push({ code, kind: 'promo', type: 'percent', value: v, until: '', note: 'Из BotHelp: скидка ' + v + '% по сумме заказа', active: true, createdAt: new Date().toISOString(), by: 'система' }); save(F.promos, promos) }
+  if (!promos.some(x => x.code === code || (x.aliases || []).includes(code))) { promos.push({ code, kind: 'promo', type: 'percent', value: v, until: '', note: 'Из BotHelp: скидка ' + v + '% по сумме заказа', active: true, createdAt: new Date().toISOString(), by: 'система', min: BOT_MIN[v] }); save(F.promos, promos) }
+  else { const p = promos.find(x => x.code === code); if (p && p.min == null) { p.min = BOT_MIN[v]; save(F.promos, promos) } } // порог от суммы — один раз, дальше меняется в приложении
 }
 { // САЛЮТ15 — 15% по ссылке t.me/Salut38_bot?start=promo_salut15 (окно «15% скидка» на старом сайте); создаётся, только если ещё нет
   let p = promos.find(x => x.code === 'САЛЮТ15' || (x.aliases || []).includes('САЛЮТ15'));
@@ -162,7 +164,7 @@ function view(o, role) {
   if (o.subst && o.subst.length && M.includes(role)) { v.rlink = o.rt ? APP_BASE() + '/r/' + o.rt : ''; v.rp = o.rp ? { sentAt: o.rp.sentAt || '', due: o.rp.due || '', rem: o.rp.rem || 0, cold: !!o.rp.cold } : null }
   v.site = SITE_BASE();
   if (o.notify) v.notify = { channel: o.notify.channel, email: o.notify.email || '', linked: !!o.notify.linked };
-  if (M.includes(role) && o.promo) { const p = findPromo(o.promo), base = o.items.reduce((s, i) => s + i.sum, 0); v.promoInfo = p ? { state: o.discount > 0 ? 'applied' : promoState(p), kind: p.kind, type: p.type, value: p.value, discount: o.discount > 0 ? o.discount : promoDiscount(p, base) } : { state: 'unknown' } }
+  if (M.includes(role) && o.promo) { const p = findPromo(o.promo), base = o.items.reduce((s, i) => s + i.sum, 0); v.promoInfo = p ? { state: o.discount > 0 ? 'applied' : promoState(p) === 'ok' && p.min > base ? 'min' : promoState(p), min: p.min || 0, kind: p.kind, type: p.type, value: p.value, discount: o.discount > 0 ? o.discount : promoDiscount(p, base) } : { state: 'unknown' } }
   if (role === 'storekeeper') { delete v.consentAt; delete v.notify; delete v.pay; delete v.paid; delete v.discountNote; delete v.phone; delete v.address; delete v.name; delete v.comment; delete v.promo; v.items = o.items.map(i => ({ ...i })); }
   if (role === 'courier') { v.items = o.items.map(({ sku, name, qty }) => ({ sku, name, qty })); }
   return v;
@@ -454,7 +456,7 @@ function cartItems(items, fix) { return (Array.isArray(items) ? items.slice(0, 8
 function cartCalc(c) { // сумма, скидка (вручную перекрывает промокод) и итог
   const sum = c.items.reduce((s, i) => s + i.sum, 0), mv = c.manual && +c.manual.value > 0 ? c.manual : null; let discount = 0, kind = '', state = ''; c.promoInfo = null;
   if (mv) { discount = mv.type === 'pct' ? Math.round(sum * Math.min(100, mv.value) / 100) : Math.min(Math.round(mv.value), sum); kind = 'manual' }
-  else if (c.promo) { const pr = findPromo(c.promo); state = !pr ? 'unknown' : promoState(pr); if (pr && state === 'ok') { discount = promoDiscount(pr, sum); kind = 'promo' } c.promoInfo = pr ? { state, type: pr.type, value: pr.value } : { state: 'unknown' } } else c.promoInfo = null;
+  else if (c.promo) { const pr = findPromo(c.promo); state = !pr ? 'unknown' : promoState(pr); if (pr && state === 'ok') { discount = promoDiscount(pr, sum); kind = 'promo' } c.promoInfo = pr ? { state: state === 'ok' && pr.min > sum ? 'min' : state, type: pr.type, value: pr.value, min: pr.min || 0 } : { state: 'unknown' } } else c.promoInfo = null;
   discount = Math.max(0, Math.min(discount, sum)); c.discount = discount; c.total = sum - discount; c.discountKind = kind; c.promoState = state; return c }
 function cartEdit(c, b) { // правки менеджера в брошенной корзине
   if ('name' in b) c.name = clean(b.name, 100) || 'Без имени';
@@ -509,7 +511,7 @@ async function api(req, res, url) {
     if (limit('c' + ipOf(req), 60, 60e3)) return send(res, 429, { ok: false }, CORS);
     const pr = findPromo(url.searchParams.get('code'));
     if (!pr || promoState(pr) !== 'ok') return send(res, 200, { ok: false }, CORS);
-    return send(res, 200, { ok: true, kind: pr.kind, type: pr.type, value: pr.value }, CORS);
+    return send(res, 200, { ok: true, kind: pr.kind, type: pr.type, value: pr.value, min: pr.min || 0 }, CORS);
   }
 
   if (m === 'POST' && p === '/notify') { // клиент выбрал, где получать статус заказа
@@ -741,7 +743,9 @@ async function api(req, res, url) {
       if (type === 'percent') { value = Math.round(+b.value); if (!(value >= 1 && value <= 90)) return { error: 'Процент от 1 до 90' } }
       if (type === 'amount') { value = Math.round(+b.value); if (!(value >= 1 && value <= 1e6)) return { error: 'Сумма скидки в рублях, от 1' } }
       const until = b.until == null ? (cur ? cur.until : '') : (/^\d{4}-\d{2}-\d{2}$/.test(String(b.until)) ? String(b.until) : '');
-      return { type, value, until };
+      const min = b.min == null ? (cur ? cur.min || 0 : 0) : Math.round(+b.min);
+      if (!(min >= 0 && min <= 1e7)) return { error: 'Сумма «от» — целое число рублей' };
+      return { type, value, until, min };
     };
     if (m === 'POST') {
       const code = normCode(b.code);
@@ -749,7 +753,7 @@ async function api(req, res, url) {
       if (promos.some(x => x.code === code || (x.aliases || []).includes(code))) return send(res, 400, { error: 'Такой код уже есть' });
       const c = check(b); if (c.error) return send(res, 400, c);
       const slug = cleanSlug(b.slug); if (slug === null) return send(res, 400, { error: 'Метка для бота: латиница, цифры, «_» или «-», 2–40 символов' }); if (slug && promos.some(x => x.slug === slug)) return send(res, 400, { error: 'Такая метка уже есть' });
-      const pr = { code, kind: b.kind === 'card' ? 'card' : 'promo', type: c.type, value: c.value, until: c.until, note: clean(b.note, 200), active: true, createdAt: new Date().toISOString(), by: me.name, ...(slug ? { slug } : {}) };
+      const pr = { code, kind: b.kind === 'card' ? 'card' : 'promo', type: c.type, value: c.value, until: c.until, min: c.min, note: clean(b.note, 200), active: true, createdAt: new Date().toISOString(), by: me.name, ...(slug ? { slug } : {}) };
       promos.push(pr); save(F.promos, promos); return send(res, 200, promoPub(pr));
     }
     const pr = promos.find(x => x.code === normCode(b.code)); if (!pr) return send(res, 404, { error: 'Код не найден' });
@@ -757,7 +761,7 @@ async function api(req, res, url) {
       if ('active' in b) pr.active = !!b.active;
       if ('note' in b) pr.note = clean(b.note, 200);
       if ('slug' in b) { const sl = cleanSlug(b.slug); if (sl === null) return send(res, 400, { error: 'Метка для бота: латиница, цифры, «_» или «-», 2–40 символов' }); if (sl && promos.some(x => x !== pr && x.slug === sl)) return send(res, 400, { error: 'Такая метка уже есть' }); if (sl) pr.slug = sl; else delete pr.slug }
-      if ('type' in b || 'value' in b || 'until' in b) { const c = check(b, pr); if (c.error) return send(res, 400, c); pr.type = c.type; pr.value = c.value; pr.until = c.until }
+      if ('type' in b || 'value' in b || 'until' in b || 'min' in b) { const c = check(b, pr); if (c.error) return send(res, 400, c); pr.type = c.type; pr.value = c.value; pr.until = c.until; pr.min = c.min }
       save(F.promos, promos); return send(res, 200, promoPub(pr));
     }
     if (m === 'DELETE') { promos = promos.filter(x => x !== pr); save(F.promos, promos); return send(res, 200, { ok: true }) }

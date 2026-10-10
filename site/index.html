@@ -417,7 +417,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 .drawer{display:block!important;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.drawer .d-head{position:sticky;top:0;z-index:3;background:var(--panel)}.drawer .d-body{overflow:visible;flex:none}.drawer .d-foot{padding-bottom:28px}
 .promo{display:grid;gap:6px}.promo-row{display:flex;gap:8px}.promo-row input{flex:1;min-width:0}.promo-row button{flex:none;background:#10162A;color:#fff;font-weight:800;font-size:14px;padding:0 16px;border-radius:12px;min-height:48px}.promo-row button.ok{background:#2B7A4B}.promo-note{font-size:12.5px;line-height:1.3;color:#2B7A4B;font-weight:600}
 .sum.dsum{font-size:15px!important;font-weight:700!important}
-.promo-err{font-size:13px;line-height:1.3;color:#C0392B;font-weight:700}
+.promo-min{font-size:13px;line-height:1.35;color:#9a5b00;background:#FFF4D6;border-radius:10px;padding:8px 10px;margin-top:8px;font-weight:600}.promo-err{font-size:13px;line-height:1.3;color:#C0392B;font-weight:700}
 .trk{margin-top:18px;text-align:left;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--panel2)}.trk>b{display:block;margin-bottom:10px;font-size:15px}.trk-b{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.trk-b button{padding:12px 4px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-weight:800;font-size:14px}.trk-b button.on{background:#FFD21F;color:#111;border-color:#FFD21F}.trk-m{margin-top:10px;font-size:14px;color:var(--muted);display:grid;gap:8px;line-height:1.35}.trk-m:empty{display:none}.trk-l{display:block;text-align:center;background:#FFD21F;color:#111;font-weight:900;padding:12px;border-radius:10px;text-decoration:none}
 .cons{display:flex;gap:10px;align-items:flex-start;margin:4px 0 10px;font-size:14px;line-height:1.35;color:var(--text);cursor:pointer}.cons input{width:22px;height:22px;flex:none;margin-top:1px;accent-color:#FFD21F}.cons .lnk{all:unset;cursor:pointer;color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:700}.cons.bad input{outline:2px solid #E5121B;outline-offset:2px}
 .ckb{position:fixed;left:12px;right:12px;bottom:12px;z-index:45;max-width:560px;margin:0 auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 40px rgba(0,0,0,.35);display:grid;gap:10px;font-size:13px;line-height:1.4}.ckb .lnk{all:unset;cursor:pointer;color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:700}.ckb .ck-b{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ckb .ck-b button{padding:11px 8px;border-radius:10px;font-weight:800;font-size:14px;border:1px solid var(--line);background:var(--panel2);color:var(--text)}.ckb .ck-b button.main{background:#FFD21F;color:#111;border-color:#FFD21F}
@@ -905,7 +905,7 @@ let OPEN={items:true,promo:true,totals:true,contacts:true,delivery:true};
 const secHtml=(id,title,sum,body,open)=>`<div class="sec${open?' open':''}" id="sec_${id}"><button type="button" class="sec-h" data-tsec="${id}" aria-expanded="${!!open}"><span class="sec-t">${title}</span><span class="sec-s">${esc(sum||'')}</span><i class="sec-c"></i></button><div class="sec-b"${open?'':' hidden'}>${body}</div></div>`;
 function secSummary(id){const v=i=>($(i)?$(i).value.trim():'');
   if(id==='items'){const n=Object.keys(cart).reduce((a,k)=>a+cart[k],0);return n+' шт. · '+ruble(total())}
-  if(id==='promo')return PROMO_OK?PROMO+' · −'+ruble(discOf(PROMO_INFO,total())):(PROMO||'не указан');
+  if(id==='promo')return PROMO_OK?(PROMO_INFO&&PROMO_INFO.min>total()?PROMO+' · от '+ruble(PROMO_INFO.min):PROMO+' · −'+ruble(discOf(PROMO_INFO,total()))):(PROMO||'не указан');
   if(id==='totals'){const t=total(),d=PROMO_OK?discOf(PROMO_INFO,t):0;return 'К оплате '+ruble(t-d)+(d?' · скидка −'+ruble(d):'')}
   if(id==='contacts')return [v('fn'),v('fp')].filter(Boolean).join(' · ')||'не заполнено';
   if(id==='delivery'){const a=[v('fs'),v('fh')?'д. '+v('fh'):''].filter(Boolean).join(', ');return [a,($('fd')?$('fd').value:''),v('fi')].filter(Boolean).join(' · ')||'не заполнено'}
@@ -934,12 +934,12 @@ function addrBlock(){return `<div class="adr">
 
 const UNI_CODES=['БАЙКАЛСАЛЮТ01','БАЙКАСАЛЮТ01'],normP=s=>String(s||'').replace(/\s/g,'').toUpperCase();
 const tierPc=t=>t<5000?5:t<20000?10:t<50000?15:t<100000?20:t<500000?25:30;
-const discOf=(i,t)=>!i?0:i.type==='percent'?Math.round(t*i.value/100):i.type==='amount'?Math.min(Math.round(i.value),t):Math.round(t*tierPc(t)/100);
+const discOf=(i,t)=>!i||(i.min>0&&t<i.min)?0:i.type==='percent'?Math.round(t*i.value/100):i.type==='amount'?Math.min(Math.round(i.value),t):Math.round(t*tierPc(t)/100);
 async function applyPromo(code){
   PROMO=String(code||'').trim();PROMO_OK=false;PROMO_INFO=null;PROMO_MSG='';
   const uni=UNI_CODES.includes(normP(PROMO));let net=false;
   try{
-    if(window.ORDER_URL){const r=await fetch(new URL('/promo/check?code='+encodeURIComponent(PROMO),window.ORDER_URL).href);const j=await r.json();if(j.ok)PROMO_INFO={type:j.type,value:j.value}}
+    if(window.ORDER_URL){const r=await fetch(new URL('/promo/check?code='+encodeURIComponent(PROMO),window.ORDER_URL).href);const j=await r.json();if(j.ok)PROMO_INFO={type:j.type,value:j.value,min:+j.min||0}}
     else if(uni)PROMO_INFO={type:'tiers',value:null}
   }catch(e){net=true;if(uni)PROMO_INFO={type:'tiers',value:null}}
   if(PROMO_INFO)PROMO_OK=true;
@@ -953,15 +953,15 @@ function renderCart(){
     $('cartFoot').innerHTML='';STEP=1;OPEN={items:true,promo:true,totals:true,contacts:true,delivery:true};return;
   }
   const tt=total(),pc=tierPc(tt),sv=Math.round(tt*pc/100);
-  const info=PROMO_OK?PROMO_INFO:null,dsc=discOf(info,tt),dpc=info?Math.round(dsc/tt*100):0,pay=tt-dsc;
+  const short=PROMO_OK&&PROMO_INFO&&PROMO_INFO.min>tt,info=PROMO_OK&&!short?PROMO_INFO:null,dsc=discOf(info,tt),dpc=info?Math.round(dsc/tt*100):0,pay=tt-dsc;
   const lines=items.map(k=>{
     const p=BY.get(k);
     return `<div class="line"><div class="t${(p.v||p.vid)?' hasv':''}"${(p.v||p.vid)?` data-v="${esc(p.sku)}"`:''}>${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${esc(p.sku)}"><i></i>Видео</button>`:''}</div>
       <div class="li"><button type="button" class="rmx" data-rm="${k}" aria-label="Убрать из корзины">×</button><b>${p.name}</b><small>${ruble(p.price)}</small>
         <div class="q"><button data-m="${k}" aria-label="Меньше">−</button><b>${cart[k]}</b><button data-p="${k}" aria-label="Больше">+</button></div>
-        <b class="lt">${ruble(p.price*cart[k])}</b></div></div>`}).join('')+`<div class="cardsave"${PROMO_OK?' style="display:none"':''}><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту</a></div>`;
+        <b class="lt">${ruble(p.price*cart[k])}</b></div></div>`}).join('')+`<div class="cardsave"${info?' style="display:none"':''}><div>💸 Можно дешевле: с виртуальной дисконтной картой на <b>${ruble(sv)}</b></div><a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту</a></div>`;
   $('cartBody').innerHTML=secHtml('items','Товары','',lines,OPEN.items);
-  const promoBody=`<div class="promo"><div class="promo-row"><input class="f" id="fpromo" placeholder="Промокод или номер дисконтной карты" autocomplete="off" autocapitalize="characters" value="${esc(PROMO)}"><button type="button" id="promoApply" class="${PROMO_OK?'ok':''}">${PROMO_OK?'Принят ✓':'Применить'}</button></div>${PROMO_MSG?'<div class="promo-err">'+esc(PROMO_MSG)+'</div>':''}</div>`;
+  const promoBody=`<div class="promo"><div class="promo-row"><input class="f" id="fpromo" placeholder="Промокод или номер дисконтной карты" autocomplete="off" autocapitalize="characters" value="${esc(PROMO)}"><button type="button" id="promoApply" class="${info?'ok':''}">${info?'Принят ✓':'Применить'}</button></div>${PROMO_MSG?'<div class="promo-err">'+esc(PROMO_MSG)+'</div>':''}${short?'<div class="promo-min">Промокод '+esc(PROMO.toUpperCase())+' действует при заказе от '+ruble(PROMO_INFO.min)+'. Добавьте товаров ещё на '+ruble(PROMO_INFO.min-tt)+' — и скидка применится.</div>':''}</div>`;
   $('cartFoot').innerHTML=secHtml('promo','Промокод','',promoBody,OPEN.promo)+secHtml('totals','Итого','',`${info?`<div class="sum"><span>Итого</span><span>${ruble(tt)}</span></div><div class="sum dsum" style="color:#1F9D55"><span>Скидка по промокоду</span><span>−${ruble(dsc)} (${dpc}%)</span></div><div class="sum"><span>К оплате</span><span>${ruble(pay)}</span></div>`:`<div class="sum"><span>Итого</span><span>${ruble(tt)}</span></div>`}`,OPEN.totals)+
     secHtml('contacts','Контакты','',`<form class="cfm" autocomplete="on" onsubmit="return false"><input class="f" id="fn" name="name" placeholder="Ваше имя" autocomplete="name" autocapitalize="words"><input class="f" id="fp" name="tel" type="tel" inputmode="tel" placeholder="Телефон" autocomplete="tel"></form>`,OPEN.contacts)+
     (STEP===2?secHtml('delivery','Доставка','',addrBlock(),OPEN.delivery):'')+`

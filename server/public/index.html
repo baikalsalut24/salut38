@@ -129,7 +129,7 @@ textarea.note{min-height:80px;resize:vertical}
 .ocase{border:1px dashed #e8a100;border-radius:10px;padding:9px 10px;margin-top:8px;font-size:14px}.ocase .db{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.ocase summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:6px}
 .splate{border-radius:8px;padding:8px 10px;margin:6px 0;font-weight:600;font-size:13.5px}.splate.r{background:#fde8e6;color:#b3261e;font-weight:700}.splate.b{background:#e6f0ff;color:#0b4fb3}.splate.y{background:#fff4d6;color:#7a4b00}.snote{color:var(--muted);font-size:12.5px;margin:4px 0}
 .cpl{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#080C16;color:#e9eefc;border-radius:10px;padding:8px 10px;margin-top:10px;font:700 12px ui-monospace,monospace}.cpl button{background:var(--y);color:#111;border-radius:7px;padding:6px 10px;font:800 12px sans-serif;flex:none}
-.btn.off{opacity:.45}.lk{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:12.5px;cursor:pointer}
+.btn.off{opacity:.45}.pmin{margin-top:8px}.pmin label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px}.pmin div{display:flex;gap:6px}.pmin .f{flex:1;margin:0}.pmin button{background:var(--y);border-radius:10px;padding:0 14px;font-weight:800}.lk{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:12.5px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -410,6 +410,7 @@ const dshort=p=>p.type==='percent'?`${p.value}%`:p.type==='amount'?rub(p.value):
 function promoLine(o){const i=o.promoInfo;let pl='';
   if(i){if(i.state==='applied')pl=` <span class="pill ok">применена · скидка −${rub(i.discount)}</span>`;
     else if(i.state==='ok')pl=` <span class="pill ok">${esc(PK[i.kind]||'Код')} · ${dshort(i)} · скидка ≈ ${rub(i.discount)}</span>`;
+    else if(i.state==='min')pl=` <span class="pill warn">сумма меньше порога: код действует от ${rub(i.min)}</span>`;
     else if(i.state==='paused')pl=' <span class="pill warn">код на паузе</span>';
     else if(i.state==='expired')pl=' <span class="pill warn">срок действия истёк</span>';
     else pl=' <span class="pill warn">нет в списке, проверьте вручную</span>'}
@@ -421,10 +422,10 @@ function fmtDate(d){return d?new Date(d+'T00:00:00').toLocaleDateString('ru-RU',
 const blink=k=>botInfo&&botInfo.tg?'https://t.me/'+botInfo.tg+'?start='+k:'';
 function botBox(){const l=blink('card');return l?`<div class="pc"><div class="r1"><span class="cd">Ссылка на бота</span></div><div class="mt">Дисконтная карта: ${esc(l)}</div><div class="mt">Статусы заказов клиентам привязываются автоматически. Просто ссылку без параметра (t.me/${esc(botInfo.tg)}) не раздавайте: по ней бот только здоровается.</div><div class="bt"><button data-cp="${esc(l)}">Копировать ссылку на карту</button></div></div>`:''}
 let promoOpen=new Set(),promoQ='';
-const pshort=p=>p.type==='percent'?p.value+'%':p.type==='amount'?rub(p.value):'5–30%';
+const pshort=p=>(p.type==='percent'?p.value+'%':p.type==='amount'?rub(p.value):'5–30%')+(p.min>0?' от '+rub(p.min):'');
 function promoRow(p,SL){const o=promoOpen.has(p.code);
   return `<div class="pr ${p.state==='ok'?'':'off'}" data-row="${esc(p.code)}"><span class="pcd">${esc(p.code)}${p.kind==='card'?' <i class="pill card">карта</i>':''}</span><span>${esc(pshort(p))}</span><span>${p.uses}</span><span><span class="pill ${SL[p.state][1]}">${SL[p.state][0]}</span></span></div>`+(o?`<div class="pd"><div class="ds">${esc(dlabel(p))}</div>
-    <div class="mt">Использован: ${p.uses} · на сумму ${rub(p.sum)}${p.disc?' · скидок на '+rub(p.disc):''}${p.until?' · до '+esc(fmtDate(p.until)):''}</div>${p.note?`<div class="mt">«${esc(p.note)}»</div>`:''}${p.slug?`<div class="mt">Метка бота: promo_${esc(p.slug)}</div>`:''}
+    <div class="mt">Использован: ${p.uses} · на сумму ${rub(p.sum)}${p.disc?' · скидок на '+rub(p.disc):''}${p.until?' · до '+esc(fmtDate(p.until)):''}</div>${p.note?`<div class="mt">«${esc(p.note)}»</div>`:''}${p.slug?`<div class="mt">Метка бота: promo_${esc(p.slug)}</div>`:''}${p.kind!=='card'?`<div class="pmin"><label>Действует от суммы заказа, ₽</label><div><input class="f" data-pmin="${esc(p.code)}" inputmode="numeric" value="${p.min||''}" placeholder="любая сумма"><button data-pmins="${esc(p.code)}">Сохранить</button></div></div>`:''}
     <div class="bt"><button data-cp="${esc(p.code)}">Копировать код</button>${p.slug&&blink('promo_'+p.slug)?`<button data-cp="${esc(blink('promo_'+p.slug))}">Ссылка для бота</button>`:''}<button data-tg="${esc(p.code)}">${p.active?'Поставить на паузу':'Включить'}</button><button class="d" data-rm="${esc(p.code)}">Удалить</button></div></div>`:'')}
 function cardsGroup(cards,q,SL){const n=cards.length,uses=cards.reduce((s,c)=>s+c.uses,0),sum=cards.reduce((s,c)=>s+c.sum,0),disc=cards.reduce((s,c)=>s+c.disc,0),used=cards.filter(c=>c.uses).length;
   const cfg=(cardCfgD&&cardCfgD.cfg)||{type:'tiers',value:null,until:'',active:true},o=promoOpen.has('__cards'),on=cfg.active!==false;
@@ -454,7 +455,7 @@ function promoForm(){
       <label for="pc_k">Что это</label><select class="sel" id="pc_k"><option value="promo">Промокод</option><option value="card">Дисконтная карта</option></select>
       <label for="pc_t">Скидка</label><select class="sel" id="pc_t"><option value="percent">В процентах</option><option value="amount">В рублях</option><option value="tiers">По системе скидок (5–30% по сумме заказа)</option></select>
       <input class="f" id="pc_v" inputmode="numeric" placeholder="Сколько процентов, от 1 до 90">
-      <label for="pc_u">Действует до (необязательно)</label><input class="f" id="pc_u" type="date">
+      <label for="pc_m">Действует от суммы заказа, ₽ (необязательно)</label><input class="f" id="pc_m" inputmode="numeric" placeholder="Например, 5000"><label for="pc_u">Действует до (необязательно)</label><input class="f" id="pc_u" type="date">
       <input class="f" id="pc_n" placeholder="Заметка: кому выдан, для чего (необязательно)">
       <input class="f" id="pc_s" placeholder="Метка для ссылки в боте, латиницей (необязательно), напр. ny10" autocapitalize="none" autocomplete="off"></div></div>
     <div class="acts"><button class="btn" id="pc_a">Добавить</button></div></div>`;
@@ -464,7 +465,7 @@ function promoForm(){
     if(e.target===bg||id==='pc_x')return closeSheet();
     try{
       if(id==='pc_g'){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let c='';for(let i=0;i<6;i++)c+=A[Math.floor(Math.random()*A.length)];$('#pc_c').value=c}
-      else if(id==='pc_a'){await api('/api/promos',{method:'POST',body:{code:$('#pc_c').value,kind:$('#pc_k').value,type:$('#pc_t').value,value:$('#pc_v').value,until:$('#pc_u').value,note:$('#pc_n').value,slug:$('#pc_s').value}});
+      else if(id==='pc_a'){await api('/api/promos',{method:'POST',body:{code:$('#pc_c').value,kind:$('#pc_k').value,type:$('#pc_t').value,value:$('#pc_v').value,until:$('#pc_u').value,min:$('#pc_m').value.replace(/\D/g,'')||0,note:$('#pc_n').value,slug:$('#pc_s').value}});
         closeSheet();toast('Добавлено',false,true);await loadPromos()}
     }catch(er){toast(er.error,true)}}}
 function drawPromos(){const mn=$('#mn');
@@ -478,6 +479,8 @@ function drawPromos(){const mn=$('#mn');
         else if(e.target.closest('[data-row]')&&!cp&&!tg&&!rm){const c=e.target.closest('[data-row]').dataset.row;promoOpen.has(c)?promoOpen.delete(c):promoOpen.add(c);$('#pl').innerHTML=promoList()}
         else if(e.target.closest('[data-cfgsave]')){const t=$('#cc_t').value,v=$('#cc_v').value,u=$('#cc_u').value,a=$('#cc_a').value==='1';if(!confirm('Применить эти настройки ко всем дисконтным картам?'))return;await api('/api/promo-cards',{method:'PATCH',body:{type:t,value:v,until:u,active:a}});toast('Настройки применены ко всем картам',false,true);await loadPromos()}
         else if(cp){try{await navigator.clipboard.writeText(cp.dataset.cp);toast('Скопировано: '+cp.dataset.cp,false,true)}catch{toast('Не удалось скопировать',true)}}
+        else if(e.target.closest('[data-pmins]')){const c=e.target.closest('[data-pmins]').dataset.pmins,i=document.querySelector(`[data-pmin="${CSS.escape(c)}"]`),v=(i.value||'').replace(/\D/g,'')||0;await api('/api/promos',{method:'PATCH',body:{code:c,min:v}});toast(+v?'Код '+c+' действует от '+rub(+v):'Код '+c+' действует на любую сумму',false,true);await loadPromos()}
+        else if(e.target.closest('[data-pmin]'))return;
         else if(tg){const p=promos.find(x=>x.code===tg.dataset.tg);await api('/api/promos',{method:'PATCH',body:{code:p.code,active:!p.active}});await loadPromos()}
         else if(rm){if(confirm('Удалить код '+rm.dataset.rm+'? У старых заказов он останется в тексте.')){await api('/api/promos',{method:'DELETE',body:{code:rm.dataset.rm}});await loadPromos()}}
       }catch(er){toast(er.error,true)}}}
@@ -659,14 +662,14 @@ async function pickProduct(onAdd){
 let cd=null;const IVS=['','Срочно везите','11:00–18:00','18:00–20:00','20:00–23:00'],TIERP=t=>t<5000?5:t<20000?10:t<50000?15:t<100000?20:t<500000?25:30;
 function cdCalc(){const sum=cd.items.reduce((a,i)=>a+i.price*i.qty,0),mv=cd.manual&&+cd.manual.value>0?cd.manual:null;let d=0,kind='';
   if(mv){d=mv.type==='pct'?Math.round(sum*Math.min(100,mv.value)/100):Math.min(Math.round(mv.value),sum);kind='manual'}
-  else if(cd.promo&&cd.promoInfo&&cd.promoInfo.state==='ok'){const pi=cd.promoInfo;d=pi.type==='percent'?Math.round(sum*pi.value/100):pi.type==='amount'?Math.min(pi.value,sum):Math.round(sum*TIERP(sum)/100);kind='promo'}
+  else if(cd.promo&&cd.promoInfo&&(cd.promoInfo.state==='ok'||cd.promoInfo.state==='min')&&!(cd.promoInfo.min>sum)){const pi=cd.promoInfo;d=pi.type==='percent'?Math.round(sum*pi.value/100):pi.type==='amount'?Math.min(pi.value,sum):Math.round(sum*TIERP(sum)/100);kind='promo'}
   d=Math.max(0,Math.min(d,sum));return{sum,d,kind,pay:sum-d,pc:sum?Math.round(d/sum*100):0}}
 function cdRead(){const v=i=>{const e=$('#'+i);return e?e.value:''};
   cd.name=v('cdn').trim();cd.phone=v('cdp').trim();cd.note=v('cdc').trim();cd.address=v('cda').trim();cd.deliveryDate=v('cdd');cd.deliveryInterval=v('cdi');cd.promo=v('cdpr').trim();
   const mt=v('cdmt'),mv=+v('cdmv')||0;cd.manual=mt&&mv>0?{type:mt,value:mv}:null}
 function cdBody(){return{name:cd.name,phone:cd.phone,note:cd.note,items:cd.items.map(i=>({sku:i.sku,name:i.name,qty:i.qty,price:i.price})),promo:cd.promo,manual:cd.manual,address:cd.address,deliveryDate:cd.deliveryDate,deliveryInterval:cd.deliveryInterval}}
 function cdItems(){$('#cdit').innerHTML=cd.items.length?cd.items.map((i,n)=>`<div class="row"><div class="t">${esc(i.name)}<small>${rub(i.price)} × ${i.qty} = ${rub(i.price*i.qty)}</small></div><div class="cdq"><button data-cdm="${n}">−</button><b>${i.qty}</b><button data-cdp="${n}">+</button><button data-cdx="${n}" style="color:var(--r)">✕</button></div></div>`).join(''):'<div class="empty" style="padding:14px">Товаров нет. Добавьте ниже.</div>';cdTot()}
-function cdTot(){const t=cdCalc(),mv=cd.manual&&cd.manual.value>0,msg=!mv&&cd.promo&&cd.promoInfo&&cd.promoInfo.state!=='ok'?`<div class="pc-err" style="color:var(--r);font-weight:700;font-size:13px">${cd.promoInfo.state==='unknown'?'Такого промокода нет в базе':cd.promoInfo.state==='paused'?'Промокод на паузе':'Срок промокода истёк'}</div>`:'';
+function cdTot(){const t=cdCalc(),mv=cd.manual&&cd.manual.value>0,msg=!mv&&cd.promo&&cd.promoInfo&&(cd.promoInfo.state==='min'?cd.promoInfo.min>t.sum:cd.promoInfo.state!=='ok')?`<div class="pc-err" style="color:var(--r);font-weight:700;font-size:13px">${cd.promoInfo.state==='unknown'?'Такого промокода нет в базе':cd.promoInfo.state==='paused'?'Промокод на паузе':cd.promoInfo.state==='min'?'Промокод действует от '+rub(cd.promoInfo.min):'Срок промокода истёк'}</div>`:'';
   $('#cdtot').innerHTML=msg+`<div class="row"><div class="t">Итого</div><div class="q">${rub(t.sum)}</div></div>${t.d?`<div class="row"><div class="t" style="color:#1F9D55">${t.kind==='manual'?'Скидка вручную':'Скидка по промокоду'}</div><div class="q" style="color:#1F9D55">−${rub(t.d)} (${t.pc}%)</div></div>`:''}<div class="row"><div class="t"><b>К оплате</b></div><div class="q" style="font-size:18px">${rub(t.pay)}</div></div>`}
 function openCartEd(id){const c=carts.find(x=>x.id===id);if(!c)return;cd=JSON.parse(JSON.stringify(c));cd.items=cd.items.map(i=>({sku:i.sku,name:i.name,qty:i.qty,price:i.price}));
   const m=cd.manual||{type:'',value:''};
