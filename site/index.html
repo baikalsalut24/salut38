@@ -470,6 +470,16 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 #favBtn .badge{background:#E5121B;color:#fff}#favCount[hidden]{display:none}
 .vframe.ended{aspect-ratio:auto;min-height:360px}
 #ppg{z-index:72}
+.pp-bar{display:none!important}.pp-bar.on{display:flex!important}
+.pp-prr2{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.pp-prr2 .pp-pr{font-size:32px}.pp-cp2{font-size:16px;font-weight:900;color:#1F9D55}
+.pp-buy{display:flex;gap:10px;align-items:center}.pp-add{width:100%!important;font-size:18px!important;padding:16px!important;border-radius:14px!important}
+.pp-buy .qty{margin:0;flex:none;gap:6px}.pp-buy .qty span{min-width:28px;text-align:center;font-weight:900;font-size:17px}.pp-buy .qty button{width:42px;height:42px;font-size:20px}
+.pp-go{flex:1;background:#10162A;color:#fff;font-weight:900;font-size:16px;padding:15px;border-radius:14px}
+.cbs{display:flex;align-items:center;gap:6px;width:100%;background:linear-gradient(135deg,#0b1022,#1c2650);color:#fff;border-radius:14px;padding:12px 10px 12px 12px;font-size:13px;font-weight:700;text-align:left}
+.cbs b{color:#FFD21F;font-weight:900}.cbs span:first-child{line-height:1.3}.cbs-a{margin-left:auto;background:#FFD21F;color:#10162A;font-weight:900;border-radius:9px;padding:6px 9px;font-size:12.5px;white-space:nowrap}
+.cbx .cbs{background:none;padding:0 0 4px}.cbx .cbs-a{background:rgba(255,255,255,.14);color:#fff}
+.pp-th{margin-bottom:-6px}
+.pp-w>*{min-width:0}
 .pp-img svg{width:100%;max-height:420px;display:block}
 .pp-img{min-height:280px}
 .ppa{position:absolute;top:10px;right:10px;display:flex;gap:8px;z-index:2}
@@ -976,6 +986,7 @@ document.addEventListener('click',e=>{
   if(e.target.closest('[data-fav-keep]')){FAVSHOW.forEach(k=>{if(!isFav(k))FAV.push(k)});try{localStorage.setItem('bs_fav',JSON.stringify(FAV))}catch(x){}favBadge();FAVSHOW=true;favDraw();msgShow('Сохранено в избранное');return}
   const o=e.target.closest('[data-open-fav]');if(o){openProduct(o.dataset.openFav);return}
   if(e.target.closest('[data-pp-share]')){const p=BY.get(PPSKU);if(p)shareUrl(pageUrl('#p/'+encodeURIComponent(p.sku)),p.name);return}
+  if(e.target.closest('[data-cbx]')){CBX_OPEN=!CBX_OPEN;ppDraw();return}
   if(e.target.closest('[data-seen-clear]')){PPV=PPSKU?[PPSKU]:[];try{localStorage.setItem('bs_viewed',JSON.stringify(PPV))}catch(x){}ppDraw();return}
 },true);
 
@@ -1007,13 +1018,15 @@ function ppChips(p){const c=[];if(p.shots>1)c.push('💥 '+p.shots+' '+zalp(p.sh
   const ht=pmVal(p,/высот/i);if(ht)c.push('🎆 высота '+esc(ht));return c.map(x=>'<span class="chp">'+x+'</span>').join('')}
 function simByPrice(p){const c0=(p.cats||[]).filter(c=>c!=='Хит продаж')[0];if(!c0)return[];
   return PRODUCTS.filter(x=>x.sku!==p.sku&&x.price>0&&(x.cats||[]).indexOf(c0)>-1&&PPV.indexOf(x.sku)<0).sort((a,b)=>Math.abs(a.price-p.price)-Math.abs(b.price-p.price)).slice(0,4)}
-function cardBox(p){const base=cardBase(p),pc=tierPc(base),nx=nextTier(base),cp=withPc(p.price,pc);
-  if(hasCard())return '';
-  return `<div class="cbx cardpromo"><div class="cbx-h"><b>💳 Цена с картой клиента</b><span>бесплатно</span></div>
+let CBX_OPEN=false;
+function cardBox(p){if(hasCard())return '';const base=cardBase(p),pc=tierPc(base),nx=nextTier(base),cp=withPc(p.price,pc);
+  const strip=`<button type="button" class="cbs" data-cbx="1" aria-expanded="${CBX_OPEN}"><span>💳 С картой <b>−${pc}%</b> · экономия <b>${ruble(p.price-cp)}</b></span><span class="cbs-a">${CBX_OPEN?'Свернуть ▴':'Получить ▾'}</span></button>`;
+  if(!CBX_OPEN)return `<div class="cardpromo">${strip}</div>`;
+  return `<div class="cbx cardpromo">${strip}
    <div class="cbx-c"><div><small>Без карты</small><b>${ruble(p.price)}</b></div><div class="y"><small>С картой −${pc}%</small><b>${ruble(cp)}</b><small>экономия ${ruble(p.price-cp)}</small></div></div>
    <div class="cbx-n">Скидка считается от суммы всего заказа. ${cart[p.sku]?'Сейчас в корзине':'В корзине '+ruble(total())+' + этот товар'} = <b>${ruble(base)}</b></div>
    ${ladderHtml(base)}${nx?`<div class="cbx-x">Добавьте ещё <b>${ruble(nx.min-base)}</b> — скидка станет <b>${nx.pc}%</b></div>`:''}
-   <a class="cbx-go" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту за 10 секунд</a><div class="cbx-s">Номер карты придёт в Telegram — введите его в корзине</div></div>`}
+   <a class="cbx-go" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту за 10 секунд</a><div class="cbx-s">Карта бесплатная. Номер придёт в Telegram, а сайт подхватит его сам</div></div>`}
 function ppHtml(p){const k=esc(p.sku),n=cart[p.sku]||0,pc=tierPc(cardBase(p)),cp=withPc(p.price,pc),fv=isFav(p.sku);
   const rows=[['Бренд',p.brand],['Категория',(p.cats||[]).filter(c=>c!=='Хит продаж').join(', ')],['Артикул',p.sku],['Видеообзор',(p.v||p.vid)?'есть':'']].concat(p.pm||[]).concat((!(p.pm||[]).some(r=>/время работы/i.test(r[0]))&&p.du>0&&SORTCATS.some(c=>(p.cats||[]).indexOf(c)>-1))?[['Время работы','~'+durTxt(p.du)]]:[]).filter(r=>r[1]);
   const seen=PPV.filter(x=>x!==p.sku).map(x=>BY.get(x)).filter(Boolean).slice(0,12);
@@ -1021,17 +1034,19 @@ function ppHtml(p){const k=esc(p.sku),n=cart[p.sku]||0,pc=tierPc(cardBase(p)),cp
   return `<div class="pp-h"><button type="button" data-pp-x="1">← Назад</button><b>${esc(p.name)}</b></div>
   <div class="pp-w"><div class="pp-img">${p.hit?'<span class="hit">Хит</span>':''}${thumb(p)}<div class="ppa"><button type="button" data-pp-share="1" aria-label="Поделиться"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10162A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg></button><button type="button" class="fav${fv?' on':''}" data-fav="${k}" aria-label="${fv?'Убрать из избранного':'В избранное'}">${HEART(fv)}</button></div>${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотрите видео"><i></i>Смотрите видео${vlen}</button>`:''}</div>
    <div><div class="pp-br">${esc(p.brand)} · ${esc((p.cats||[]).filter(c=>c!=='Хит продаж')[0]||'')}</div><h1>${esc(p.name)}</h1><div class="chps">${ppChips(p)}</div></div>
-   <div class="pp-prr"><div><small>Цена</small><div class="pp-pr">${ruble(p.price)}</div></div><div class="pp-cp cardprice"><small>${hasCard()?'По вашей карте':'С картой клиента'} −${pc}%</small><b>${ruble(cp)}</b></div></div>
-   ${trustHtml()}${cardBox(p)}
-   <div class="pp-t">${rows.map(r=>`<div><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>
+   <div class="pp-prr2"><div class="pp-pr">${ruble(p.price)}</div><div class="pp-cp2 cardprice">${ruble(cp)} ${hasCard()?'по вашей карте':'по карте'}</div></div>
+   <div class="pp-buy" id="ppbuy">${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div><button type="button" class="pp-go" data-ppcart="1">Перейти в корзину${count()?' · '+count():''}</button>`:`<button type="button" class="add pp-add" data-p="${k}">В корзину · ${ruble(p.price)}</button>`}</div>
+   ${cardBox(p)}
+   <h2 class="pp-th">Характеристики</h2><div class="pp-t">${rows.map(r=>`<div><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>
    ${seen.length?`<div class="seen-h"><h2>Вы смотрели</h2><button type="button" data-seen-clear="1">очистить</button></div><div class="seen">${seen.map(x=>`<button type="button" class="sn" data-open-fav="${esc(x.sku)}">${thumb(x)}<span>${esc(x.name)}</span><b>${ruble(x.price)}</b></button>`).join('')}</div>`:''}
    </div>
   <div class="pp-bar"><div class="pb-p">${ruble(p.price)}<small class="cardprice">с картой ${ruble(cp)}</small></div><div class="pb-a">${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div>`:`<button class="add" data-p="${k}">В корзину</button>`}<button type="button" id="ppcart">Корзина${count()?' · '+count():''}</button></div></div>`}
 
-function ppDraw(){const el=document.getElementById('ppg'),p=BY.get(PPSKU);if(!el||!p)return;const sc=el.scrollTop;el.innerHTML=ppHtml(p);el.scrollTop=sc}
+function ppDraw(){const el=document.getElementById('ppg'),p=BY.get(PPSKU);if(!el||!p)return;const sc=el.scrollTop;el.innerHTML=ppHtml(p);el.scrollTop=sc;ppBarWatch()}
+let PPIO=null;function ppBarWatch(){const el=document.getElementById('ppg'),b=document.getElementById('ppbuy'),bar=el&&el.querySelector('.pp-bar');if(!b||!bar)return;if(PPIO)PPIO.disconnect();if(!('IntersectionObserver' in window)){bar.classList.add('on');return}PPIO=new IntersectionObserver(es=>{es.forEach(x=>bar.classList.toggle('on',!x.isIntersecting&&x.boundingClientRect.top<0))},{root:el,threshold:0});PPIO.observe(b)}
 function openProduct(sku){const p=BY.get(sku);if(!p)return;let el=document.getElementById('ppg');
   if(!el){el=document.createElement('div');el.id='ppg';el.className='ppg';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');document.body.appendChild(el)}
-  PPSKU=sku;el.innerHTML=ppHtml(p);ppSeen(sku);el.scrollTop=0;el.classList.add('on');document.body.style.overflow='hidden';
+  PPSKU=sku;CBX_OPEN=false;el.innerHTML=ppHtml(p);ppSeen(sku);el.scrollTop=0;ppBarWatch();el.classList.add('on');document.body.style.overflow='hidden';
   if(!PPH){try{history.pushState({prod:1},'');PPH=true}catch(e){}}}
 function closeProduct(){const el=document.getElementById('ppg');if(el)el.classList.remove('on');PPSKU=null;document.body.style.overflow='';
   if(PPH){PPH=false;try{history.back()}catch(e){}}}
@@ -1040,7 +1055,7 @@ window.addEventListener('popstate',()=>{const el=document.getElementById('ppg');
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&PPSKU)closeProduct()});
 document.addEventListener('click',e=>{
   if(e.target.closest('[data-pp-x]')){closeProduct();return}
-  if(e.target.closest('#ppcart')){closeProduct();openCart(true);return}
+  if(e.target.closest('#ppcart,[data-ppcart]')){closeProduct();openCart(true);return}
   const a=e.target.closest('article.card[data-open]');if(a&&!e.target.closest('button,a'))openProduct(a.dataset.open)});
 /* каталог из приложения сотрудников: скрытые товары и цены, выставленные менеджером */
 (function(){if(!window.ORDER_URL)return;const ctl=new AbortController();setTimeout(()=>ctl.abort(),5000);
