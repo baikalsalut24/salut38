@@ -132,6 +132,8 @@ const promoDiscount = (p, total) => p.min > 0 && total < p.min ? 0 : p.type === 
 const cleanSlug = v => { const t = String(v == null ? '' : v).trim().toLowerCase(); return t === '' ? '' : /^[a-z0-9_-]{2,40}$/.test(t) ? t : null }; // метка для ссылки на бота: t.me/бот?start=promo_МЕТКА
 const irkToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const CLAIMS = new Map(); // метка сайта → номер карты (живёт час, только в памяти)
+const SNAPS = new Map(); // метка сайта → корзина (сутки, в памяти): чтобы корзина открылась и в другом браузере после бота
+const snapCart = it => { const o = {}; let n = 0; for (const [k, v] of Object.entries(it && typeof it === 'object' ? it : {})) { const q = Math.floor(+v); if (/^[\p{L}\p{N}_.\-\/]{1,40}$/u.test(k) && q > 0 && q <= 999 && n++ < 200) o[k] = q } return o };
 const claimCard = (sid, code) => { CLAIMS.set(String(sid).toLowerCase(), { code, at: Date.now() }); if (CLAIMS.size > 20000) for (const [k, v] of CLAIMS) if (Date.now() - v.at > 36e5) CLAIMS.delete(k) };
 const BOT_MIN = { 5: 0, 10: 5000, 15: 20000, 20: 50000, 25: 100000, 30: 500000 }; // как в таблице «скидки» в боте (и на InSales)
 for (const v of [5, 10, 15, 20, 25, 30]) { // старые промокоды из BotHelp: остаются рабочими; создаются, только если их ещё нет
@@ -509,6 +511,15 @@ async function api(req, res, url) {
     persist(); alertOrder(orders[id]); return send(res, 200, { ok: true, id, total: sumAll - discount, discount, link: orderLink(orders[id]) }, CORS);
   }
 
+  if (p === '/cart/snap') { // сайт: запомнить корзину перед переходом в бота / забрать её по ссылке из бота
+    if (limit('cs' + ipOf(req), 120, 60e3)) return send(res, 429, { ok: false }, CORS);
+    if (m === 'POST') { let o; try { o = await body(req) } catch { return send(res, 400, { ok: false }, CORS) }
+      const k = String(o.sid || '').toLowerCase(); if (!/^[a-f0-9]{16,40}$/.test(k)) return send(res, 400, { ok: false }, CORS);
+      SNAPS.set(k, { items: snapCart(o.items), at: Date.now() }); if (SNAPS.size > 20000) for (const [x, v] of SNAPS) if (Date.now() - v.at > 864e5) SNAPS.delete(x);
+      return send(res, 200, { ok: true }, CORS) }
+    const k = String(url.searchParams.get('sid') || '').toLowerCase(), c = /^[a-f0-9]{16,40}$/.test(k) && SNAPS.get(k);
+    return send(res, 200, c && Date.now() - c.at < 864e5 ? { ok: true, items: c.items } : { ok: false }, CORS);
+  }
   if (m === 'GET' && p === '/card/claim') { // сайт спрашивает: выдал ли бот карту по его метке (человек нажал «Получить карту» на сайте)
     if (limit('cc' + ipOf(req), 120, 60e3)) return send(res, 429, { ok: false }, CORS);
     const k = String(url.searchParams.get('sid') || '').toLowerCase(), c = /^[a-f0-9]{12,40}$/.test(k) && CLAIMS.get(k);
@@ -906,7 +917,7 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end() }
   try {
-    if (url.pathname === '/order' || url.pathname === '/cart' || url.pathname === '/catalog' || url.pathname === '/notify' || url.pathname === '/promo/check' || url.pathname === '/card/claim' || url.pathname.startsWith('/api/')) {
+    if (url.pathname === '/order' || url.pathname === '/cart' || url.pathname === '/catalog' || url.pathname === '/notify' || url.pathname === '/promo/check' || url.pathname === '/card/claim' || url.pathname === '/cart/snap' || url.pathname.startsWith('/api/')) {
       const orig = res.writeHead.bind(res); res.writeHead = (c, h) => orig(c, { ...CORS, ...h });
       return await api(req, res, url);
     }
