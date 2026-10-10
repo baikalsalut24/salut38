@@ -984,7 +984,17 @@ function cardBoot(){subCls();let c='';const m=location.hash.match(/^#card\/([^/?
   if(m||q){c=decodeURIComponent(m?m[1]:q).trim();try{history.replaceState(null,'',location.pathname)}catch(e){}}
   if(location.hash==='#sub'){markSub('promo');try{history.replaceState(null,'',location.pathname)}catch(e){}}
   if(!c)try{c=localStorage.getItem('bs_card')||localStorage.getItem('bs_promo')||''}catch(e){}
+  if(!c&&window.ORDER_URL){try{if(localStorage.getItem('bs_sid')){CLAIM_UNTIL=Date.now()+4000;claimPoll()}}catch(e){}}
   if(!c||!window.ORDER_URL)return;applyPromo(c).then(()=>{if(hasCard()){sync();if(m||q)msgShow('Карта клиента подключена: скидка до 30%')}})}
+/* «Получить карту» на сайте: ссылка в бота несёт метку сайта, бот запоминает выданную карту, сайт сам её подхватывает */
+function bsSid(){let s='';try{s=localStorage.getItem('bs_sid')||''}catch(e){}if(!/^[a-f0-9]{16,40}$/.test(s)){s=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join('');try{localStorage.setItem('bs_sid',s)}catch(e){}}return s}
+let CLAIM_T=0,CLAIM_UNTIL=0;
+async function claimPoll(){clearTimeout(CLAIM_T);if(!window.ORDER_URL||hasCard()||Date.now()>CLAIM_UNTIL)return;
+  try{const r=await fetch(new URL('/card/claim?sid='+bsSid(),window.ORDER_URL).href,{cache:'no-store'});const j=await r.json();
+    if(j.ok&&j.code){CLAIM_UNTIL=0;await applyPromo(j.code);if(hasCard()){sync();msgShow('Карта '+j.code+' подключена — цены по карте уже на сайте')}return}}catch(e){}
+  CLAIM_T=setTimeout(claimPoll,document.hidden?8000:3000)}
+document.addEventListener('click',e=>{const a=e.target.closest('a[href*="start=card"]');if(!a)return;a.href=a.href.replace(/start=card[^&#]*/,'start=card_'+bsSid());CLAIM_UNTIL=Date.now()+15*60e3;CLAIM_T=setTimeout(claimPoll,4000)},true);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CLAIM_UNTIL>Date.now())claimPoll()});
 /* страница товара */
 let PPSKU=null,PPH=false;
 let PPV=[];try{PPV=JSON.parse(localStorage.getItem('bs_viewed')||'[]')}catch(e){}

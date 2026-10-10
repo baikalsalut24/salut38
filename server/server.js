@@ -131,6 +131,8 @@ const TIER = t => t < 5000 ? 5 : t < 20000 ? 10 : t < 50000 ? 15 : t < 100000 ? 
 const promoDiscount = (p, total) => p.min > 0 && total < p.min ? 0 : p.type === 'percent' ? Math.round(total * p.value / 100) : p.type === 'amount' ? Math.min(Math.round(p.value), total) : Math.round(total * TIER(total) / 100);
 const cleanSlug = v => { const t = String(v == null ? '' : v).trim().toLowerCase(); return t === '' ? '' : /^[a-z0-9_-]{2,40}$/.test(t) ? t : null }; // метка для ссылки на бота: t.me/бот?start=promo_МЕТКА
 const irkToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+const CLAIMS = new Map(); // метка сайта → номер карты (живёт час, только в памяти)
+const claimCard = (sid, code) => { CLAIMS.set(String(sid).toLowerCase(), { code, at: Date.now() }); if (CLAIMS.size > 20000) for (const [k, v] of CLAIMS) if (Date.now() - v.at > 36e5) CLAIMS.delete(k) };
 const BOT_MIN = { 5: 0, 10: 5000, 15: 20000, 20: 50000, 25: 100000, 30: 500000 }; // как в таблице «скидки» в боте (и на InSales)
 for (const v of [5, 10, 15, 20, 25, 30]) { // старые промокоды из BotHelp: остаются рабочими; создаются, только если их ещё нет
   const code = 'БОТ' + String(v).padStart(2, '0');
@@ -507,6 +509,11 @@ async function api(req, res, url) {
     persist(); alertOrder(orders[id]); return send(res, 200, { ok: true, id, total: sumAll - discount, discount, link: orderLink(orders[id]) }, CORS);
   }
 
+  if (m === 'GET' && p === '/card/claim') { // сайт спрашивает: выдал ли бот карту по его метке (человек нажал «Получить карту» на сайте)
+    if (limit('cc' + ipOf(req), 120, 60e3)) return send(res, 429, { ok: false }, CORS);
+    const k = String(url.searchParams.get('sid') || '').toLowerCase(), c = /^[a-f0-9]{12,40}$/.test(k) && CLAIMS.get(k);
+    return send(res, 200, c && Date.now() - c.at < 36e5 ? { ok: true, code: c.code } : { ok: false }, CORS);
+  }
   if (m === 'GET' && p === '/promo/check') { // сайт спрашивает, действует ли код
     if (limit('c' + ipOf(req), 60, 60e3)) return send(res, 429, { ok: false }, CORS);
     const pr = findPromo(url.searchParams.get('code'));
@@ -899,7 +906,7 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end() }
   try {
-    if (url.pathname === '/order' || url.pathname === '/cart' || url.pathname === '/catalog' || url.pathname === '/notify' || url.pathname === '/promo/check' || url.pathname.startsWith('/api/')) {
+    if (url.pathname === '/order' || url.pathname === '/cart' || url.pathname === '/catalog' || url.pathname === '/notify' || url.pathname === '/promo/check' || url.pathname === '/card/claim' || url.pathname.startsWith('/api/')) {
       const orig = res.writeHead.bind(res); res.writeHead = (c, h) => orig(c, { ...CORS, ...h });
       return await api(req, res, url);
     }
@@ -912,6 +919,6 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
     const pr = o.promo ? findPromo(o.promo) : null; return pr && pr.owner && pr.owner.ch === 'telegram' ? String(pr.owner.id) : '';
   };
   SUBS = require('./subs')({ DATA, alert: alertText, orders: () => orders, ownerOf, testers: () => String(process.env.ALERT_CHAT || '').split(',').map(x => x.trim()).filter(Boolean) }); SUBS.start();
-  BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), cardDefaults: () => cardCfg, orders: () => orders, persist, statusText, irkToday, substAnswer }); BOT.start() });
+  BOT = require('./cardbot')({ subs: SUBS, promos: () => promos, savePromos: () => save(F.promos, promos), cardDefaults: () => cardCfg, orders: () => orders, persist, statusText, irkToday, substAnswer, claimCard }); BOT.start() });
 
-if (process.env.BS_TEST) module.exports = { view, orders, BASE, orderLink, startOos, substAnswer, remindSubst, flushRepl, replLink, acceptAll, setBot: b => { BOT = b }, cat };
+if (process.env.BS_TEST) module.exports = { view, orders, BASE, orderLink, startOos, substAnswer, remindSubst, flushRepl, replLink, acceptAll, claimCard, setBot: b => { BOT = b }, cat };

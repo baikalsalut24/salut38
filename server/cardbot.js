@@ -65,12 +65,13 @@ module.exports = function init(ctx) { // ctx: promos(), savePromos(), orders(), 
     const text = text0, sm = text.match(/^\/start(?:\s+(\S+))?/), key = sm && sm[1];
     const sid = u.userId || u.chatId;
     if (ch === 'telegram' && /^\/stop\b/i.test(text)) { ctx.subs && ctx.subs.setSt(sid, 'unsub', TG); return send(ch, u.chatId, 'Вы отписались от рассылок. Заказы и статусы это не затрагивает. Чтобы вернуться, нажмите /start.') }
-    if (ch === 'telegram' && ctx.subs) ctx.subs.touch(sid, { start: !!sm, name: u.name, tag: key === 'card' ? 'бот:карта' : key && key.startsWith('promo_') ? 'бот:' + key : '' }, TG);
+    if (ch === 'telegram' && ctx.subs) ctx.subs.touch(sid, { start: !!sm, name: u.name, tag: key && /^card(_|$)/.test(key) ? 'бот:карта' : key && key.startsWith('promo_') ? 'бот:' + key : '' }, TG);
     const kb = ch === 'telegram' && !LEGACY ? KB : undefined, say = (x, photo) => send(ch, u.chatId, x, photo, kb);
     const home = () => ch === 'telegram' && LEGACY ? sendWelcome(u.chatId) : say(welcome);
-    const card = () => say(cardText(cardFor(ch, u.userId || u.chatId, u.name)), ch === 'telegram' ? CARD_IMG : '');
+    const card = cs => { const c = cardFor(ch, u.userId || u.chatId, u.name); if (cs && ctx.claimCard) ctx.claimCard(cs, c.code); return say(cardText(c), ch === 'telegram' ? CARD_IMG : '') }; // cs — метка сайта: сайт сам подхватит номер карты
     if (sm) { // переход по ссылке: параметр после start решает, что показать
       if (key === 'card') return card();
+      if (key && /^card_[a-f0-9]{12,40}$/.test(key)) return card(key.slice(5));
       if (key === 'discounts' && ch === 'telegram') return sendPhotoFile(u.chatId, DISC_IMG, DISC_TXT, IK([[{ text: 'назад', callback_data: 'home' }, ...SHOP]])); // то же, что кнопка «скидки» в меню: список промокодов 5–30%
       if (key && key.startsWith('promo_')) {
         const slug = key.slice(6).toLowerCase(), p = ctx.promos().find(x => x.kind === 'promo' && x.slug === slug);
