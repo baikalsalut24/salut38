@@ -504,7 +504,7 @@ async function api(req, res, url) {
     const now = new Date().toISOString();
     orders[id] = { id, createdAt: now, name: clean(o.name, 100) || 'Без имени', phone, address: clean(o.address, 300), comment: clean(o.comment, 500), promo: clean(o.promo, 60), deliveryDate: /^\d{4}-\d{2}-\d{2}$/.test(String(o.deliveryDate || '')) ? String(o.deliveryDate) : '', deliveryInterval: clean(o.deliveryInterval, 20), source: clean(o.source, 60) || 'Сайт', consentAt: o.consent === true ? now : '', items: its, discount, total: sumAll - discount, status: 'new', paid: false, pay: 'unpaid', courierId: null, history: [{ at: now, by: 'Сайт', role: 'site', from: null, to: 'new', note: '' }], updatedAt: now };
     dropCarts(clean(o.cartId, 30).replace(/[^\w-]/g, ''), phone); // из брошенных — в обычные
-    persist(); alertOrder(orders[id]); return send(res, 200, { ok: true, id, total: sumAll - discount, discount }, CORS);
+    persist(); alertOrder(orders[id]); return send(res, 200, { ok: true, id, total: sumAll - discount, discount, link: orderLink(orders[id]) }, CORS);
   }
 
   if (m === 'GET' && p === '/promo/check') { // сайт спрашивает, действует ли код
