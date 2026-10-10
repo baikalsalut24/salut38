@@ -529,6 +529,9 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
 .lbar-l{height:9px;background:rgba(255,255,255,.15);border-radius:6px;margin:8px 0 5px;overflow:hidden}.lbar-l i{display:block;height:100%;background:#FFD21F;border-radius:6px}
 .lbar-s{display:flex;justify-content:space-between;font-size:10.5px;color:#9aa3bd}
 .cardsave .lbar{margin:8px 0}
+.only-card{display:none}html.is-card .only-card{display:block}
+html.is-sub .cardpromo{display:none!important}
+html.is-sub:not(.is-card) .cardprice{display:none!important}
 .line{grid-template-columns:60px 1fr!important;align-items:center!important;gap:10px!important;padding:8px 0!important}
 .line .t{width:60px!important;height:60px!important;aspect-ratio:auto!important;border-radius:10px!important}
 .line .t img{padding:3px!important}
@@ -582,7 +585,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
     </button>
   </div>
   <div class="menu" id="menu">
-    <a href="#catalog">Каталог</a><a href="#fav" data-menu-fav="1">Избранное</a><a href="#discount">Скидки по карте</a><a href="#geo">Доставка</a><a href="#contacts">Контакты</a>
+    <a href="#catalog">Каталог</a><a href="#fav" data-menu-fav="1">Избранное</a><a href="#discount" class="cardpromo">Скидки по карте</a><a href="#geo">Доставка</a><a href="#contacts">Контакты</a>
   </div>
 </header>
 
@@ -669,12 +672,12 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
   <div class="discband">
     <div class="wrap">
       <h2 class="ph y">Лесенка скидок</h2><br><h2 class="ph r">до 30% по карте</h2>
-      <p class="disc-p">Чем больше заказ — тем больше скидка. Карта клиента бесплатная, скидка считается от суммы всего заказа.</p>
+      <p class="disc-p cardpromo">Чем больше заказ — тем больше скидка. Карта клиента бесплатная, скидка считается от суммы всего заказа.</p><p class="disc-p only-card">Ваша карта подключена: скидка по этой лесенке считается в корзине автоматически.</p>
       <div class="stairs" aria-label="Скидка по сумме заказа">
         <div style="height:64px"><b>5%</b><small>до 5 000 ₽</small></div><div style="height:88px"><b>10%</b><small>от 5 000 ₽</small></div><div style="height:112px"><b>15%</b><small>от 20 000 ₽</small></div><div style="height:136px"><b>20%</b><small>от 50 000 ₽</small></div><div style="height:160px"><b>25%</b><small>от 100 000 ₽</small></div><div class="top" style="height:184px"><b>30%</b><small>от 500 000 ₽</small></div>
       </div>
-      <ol class="howto"><li>Нажмите кнопку — откроется наш бот в Telegram</li><li>Номер карты придёт сразу, бесплатно</li><li>Введите номер в корзине — скидка посчитается сама</li></ol>
-      <a class="disc-go" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.2L2.9 10.4c-1 .4-1 1.1-.2 1.3l4.7 1.5 1.8 5.6c.2.6.4.8.8.8.4 0 .6-.2.9-.4l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3-14.3c.3-1.2-.4-1.8-1.1-1.2zM8.4 12.9l9.6-6c.5-.3.9-.1.5.2l-7.9 7.1-.3 3.3z" fill="#111"/></svg>Получить карту в Telegram</a>
+      <ol class="howto cardpromo"><li>Нажмите кнопку — откроется наш бот в Telegram</li><li>Номер карты придёт сразу, бесплатно</li><li>Введите номер в корзине — скидка посчитается сама</li></ol>
+      <a class="disc-go cardpromo" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener"><svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.2L2.9 10.4c-1 .4-1 1.1-.2 1.3l4.7 1.5 1.8 5.6c.2.6.4.8.8.8.4 0 .6-.2.9-.4l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3-14.3c.3-1.2-.4-1.8-1.1-1.2zM8.4 12.9l9.6-6c.5-.3.9-.1.5.2l-7.9 7.1-.3 3.3z" fill="#111"/></svg>Получить карту в Telegram</a>
     </div>
   </div>
 </section>
@@ -701,7 +704,7 @@ footer .f-req{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
   </div>
 </footer>
 
-<div class="vmodal" id="vmodal" role="dialog" aria-modal="true" aria-label="Видео товара"><div class="vbox"><header><b id="vtitle2"></b><button type="button" id="vclose" aria-label="Закрыть">×</button></header><div class="vframe" id="vframe"></div><div class="vfoot"><div class="vchips"><span>💵 Закажите сейчас, оплатите потом</span><span>🚚 Доставим по всей области</span></div><div class="vsave" id="vsave"></div><div class="vrow"><a class="vcard2" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">💳 Получить карту</a><div class="vbuy" id="vbuy"></div></div></div></div></div>
+<div class="vmodal" id="vmodal" role="dialog" aria-modal="true" aria-label="Видео товара"><div class="vbox"><header><b id="vtitle2"></b><button type="button" id="vclose" aria-label="Закрыть">×</button></header><div class="vframe" id="vframe"></div><div class="vfoot"><div class="vchips"><span>💵 Закажите сейчас, оплатите потом</span><span>🚚 Доставим по всей области</span></div><div class="vsave" id="vsave"></div><div class="vrow"><a class="vcard2 cardpromo" href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">💳 Получить карту</a><div class="vbuy" id="vbuy"></div></div></div></div></div>
 <div class="veil" id="veil"></div>
 <aside class="drawer" id="drawer" aria-label="Корзина" aria-hidden="true">
   <div class="d-head"><h2 class="ph y">Корзина</h2><button class="icon-btn" id="closeCart" aria-label="Закрыть"><svg width="22" height="22" viewBox="0 0 24 24" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
@@ -830,7 +833,7 @@ function card(p){
   const spec=specHtml(p);
   return `<article class="card" data-open="${k}">${p.hit?'<span class="hit">Хит</span>':''}
     <div class="img">${thumb(p)}<button type="button" class="fav${isFav(p.sku)?' on':''}" data-fav="${k}" aria-label="${isFav(p.sku)?'Убрать из избранного':'В избранное'}">${HEART(isFav(p.sku))}</button>${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотреть видео"><i></i>Видео</button>`:''}</div>
-    <div class="info"><div class="brand">${esc(p.brand)}</div><h3>${esc(p.name)}</h3><div class="spec">${spec}</div><div class="price">${ruble(p.price)}</div><div class="pcard">${hasCard()?'по вашей карте':'с картой'} −${tierPc(p.price)}%: ${ruble(withPc(p.price,tierPc(p.price)))}</div>
+    <div class="info"><div class="brand">${esc(p.brand)}</div><h3>${esc(p.name)}</h3><div class="spec">${spec}</div><div class="price">${ruble(p.price)}</div><div class="pcard cardprice">${hasCard()?'по вашей карте':'с картой'} −${tierPc(p.price)}%: ${ruble(withPc(p.price,tierPc(p.price)))}</div>
     ${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div>`
        :`<button class="add" data-p="${k}">В корзину</button>`}
     </div></article>`;
@@ -930,6 +933,10 @@ const TIERS=[[0,5],[5000,10],[20000,15],[50000,20],[100000,25],[500000,30]];
 const TIER_L=['до 5 т','5–20 т','20–50 т','50–100 т','100–500 т','от 500 т'];
 function nextTier(sum){for(const [m,pc] of TIERS)if(sum<m)return{min:m,pc};return null}
 function hasCard(){return !!(PROMO_OK&&PROMO_INFO&&PROMO_INFO.kind==='card')}
+/* клиент уже наш: карта или промокод из бота — рекламу карты ему не показываем (is-card / is-sub на <html>) */
+function subState(){try{return localStorage.getItem('bs_sub')||''}catch(e){return ''}}
+function markSub(kind){try{if(kind==='card'||subState()!=='card')localStorage.setItem('bs_sub',kind)}catch(e){}subCls()}
+function subCls(){const s=subState(),h=document.documentElement;h.classList.toggle('is-card',s==='card'||hasCard());h.classList.toggle('is-sub',!!s||hasCard())}
 function cardBase(p){return total()+(cart[p.sku]?0:p.price)}
 const withPc=(price,pc)=>Math.round(price*(1-pc/100));
 function ladderHtml(sum){const pc=tierPc(sum),nx=nextTier(sum);
@@ -974,9 +981,10 @@ document.addEventListener('click',e=>{
 },true);
 
 /* карта клиента запоминается на телефоне: введена один раз или пришла ссылкой из бота (#card/НОМЕР или ?card=НОМЕР) */
-function cardBoot(){let c='';const m=location.hash.match(/^#card\/([^/?#]+)/),q=new URLSearchParams(location.search).get('card');
+function cardBoot(){subCls();let c='';const m=location.hash.match(/^#card\/([^/?#]+)/),q=new URLSearchParams(location.search).get('card');
   if(m||q){c=decodeURIComponent(m?m[1]:q).trim();try{history.replaceState(null,'',location.pathname)}catch(e){}}
-  if(!c)try{c=localStorage.getItem('bs_card')||''}catch(e){}
+  if(location.hash==='#sub'){markSub('promo');try{history.replaceState(null,'',location.pathname)}catch(e){}}
+  if(!c)try{c=localStorage.getItem('bs_card')||localStorage.getItem('bs_promo')||''}catch(e){}
   if(!c||!window.ORDER_URL)return;applyPromo(c).then(()=>{if(hasCard()){sync();if(m||q)msgShow('Карта клиента подключена: скидка до 30%')}})}
 /* страница товара */
 let PPSKU=null,PPH=false;
@@ -991,8 +999,8 @@ function ppChips(p){const c=[];if(p.shots>1)c.push('💥 '+p.shots+' '+zalp(p.sh
 function simByPrice(p){const c0=(p.cats||[]).filter(c=>c!=='Хит продаж')[0];if(!c0)return[];
   return PRODUCTS.filter(x=>x.sku!==p.sku&&x.price>0&&(x.cats||[]).indexOf(c0)>-1&&PPV.indexOf(x.sku)<0).sort((a,b)=>Math.abs(a.price-p.price)-Math.abs(b.price-p.price)).slice(0,4)}
 function cardBox(p){const base=cardBase(p),pc=tierPc(base),nx=nextTier(base),cp=withPc(p.price,pc);
-  if(hasCard())return `<div class="cbx cbx-on"><b>💳 Ваша карта: −${pc}%</b><span>цена ${ruble(cp)}</span></div>`;
-  return `<div class="cbx"><div class="cbx-h"><b>💳 Цена с картой клиента</b><span>бесплатно</span></div>
+  if(hasCard())return '';
+  return `<div class="cbx cardpromo"><div class="cbx-h"><b>💳 Цена с картой клиента</b><span>бесплатно</span></div>
    <div class="cbx-c"><div><small>Без карты</small><b>${ruble(p.price)}</b></div><div class="y"><small>С картой −${pc}%</small><b>${ruble(cp)}</b><small>экономия ${ruble(p.price-cp)}</small></div></div>
    <div class="cbx-n">Скидка считается от суммы всего заказа. ${cart[p.sku]?'Сейчас в корзине':'В корзине '+ruble(total())+' + этот товар'} = <b>${ruble(base)}</b></div>
    ${ladderHtml(base)}${nx?`<div class="cbx-x">Добавьте ещё <b>${ruble(nx.min-base)}</b> — скидка станет <b>${nx.pc}%</b></div>`:''}
@@ -1004,12 +1012,12 @@ function ppHtml(p){const k=esc(p.sku),n=cart[p.sku]||0,pc=tierPc(cardBase(p)),cp
   return `<div class="pp-h"><button type="button" data-pp-x="1">← Назад</button><b>${esc(p.name)}</b></div>
   <div class="pp-w"><div class="pp-img">${p.hit?'<span class="hit">Хит</span>':''}${thumb(p)}<div class="ppa"><button type="button" data-pp-share="1" aria-label="Поделиться"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10162A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg></button><button type="button" class="fav${fv?' on':''}" data-fav="${k}" aria-label="${fv?'Убрать из избранного':'В избранное'}">${HEART(fv)}</button></div>${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${k}" aria-label="Смотрите видео"><i></i>Смотрите видео${vlen}</button>`:''}</div>
    <div><div class="pp-br">${esc(p.brand)} · ${esc((p.cats||[]).filter(c=>c!=='Хит продаж')[0]||'')}</div><h1>${esc(p.name)}</h1><div class="chps">${ppChips(p)}</div></div>
-   <div class="pp-prr"><div><small>Цена</small><div class="pp-pr">${ruble(p.price)}</div></div><div class="pp-cp"><small>${hasCard()?'По вашей карте':'С картой клиента'} −${pc}%</small><b>${ruble(cp)}</b></div></div>
+   <div class="pp-prr"><div><small>Цена</small><div class="pp-pr">${ruble(p.price)}</div></div><div class="pp-cp cardprice"><small>${hasCard()?'По вашей карте':'С картой клиента'} −${pc}%</small><b>${ruble(cp)}</b></div></div>
    ${trustHtml()}${cardBox(p)}
    <div class="pp-t">${rows.map(r=>`<div><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>
    ${seen.length?`<div class="seen-h"><h2>Вы смотрели</h2><button type="button" data-seen-clear="1">очистить</button></div><div class="seen">${seen.map(x=>`<button type="button" class="sn" data-open-fav="${esc(x.sku)}">${thumb(x)}<span>${esc(x.name)}</span><b>${ruble(x.price)}</b></button>`).join('')}</div>`:''}
    </div>
-  <div class="pp-bar"><div class="pb-p">${ruble(p.price)}<small>с картой ${ruble(cp)}</small></div><div class="pb-a">${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div>`:`<button class="add" data-p="${k}">В корзину</button>`}<button type="button" id="ppcart">Корзина${count()?' · '+count():''}</button></div></div>`}
+  <div class="pp-bar"><div class="pb-p">${ruble(p.price)}<small class="cardprice">с картой ${ruble(cp)}</small></div><div class="pb-a">${n?`<div class="qty"><button data-m="${k}" aria-label="Меньше">−</button><span>${n}</span><button data-p="${k}" aria-label="Больше">+</button></div>`:`<button class="add" data-p="${k}">В корзину</button>`}<button type="button" id="ppcart">Корзина${count()?' · '+count():''}</button></div></div>`}
 
 function ppDraw(){const el=document.getElementById('ppg'),p=BY.get(PPSKU);if(!el||!p)return;const sc=el.scrollTop;el.innerHTML=ppHtml(p);el.scrollTop=sc}
 function openProduct(sku){const p=BY.get(sku);if(!p)return;let el=document.getElementById('ppg');
@@ -1112,8 +1120,8 @@ async function applyPromo(code){
     if(window.ORDER_URL){const r=await fetch(new URL('/promo/check?code='+encodeURIComponent(PROMO),window.ORDER_URL).href);const j=await r.json();if(j.ok)PROMO_INFO={type:j.type,value:j.value,min:+j.min||0,kind:j.kind||'promo'}}
     else if(uni)PROMO_INFO={type:'tiers',value:null}
   }catch(e){net=true;if(uni)PROMO_INFO={type:'tiers',value:null}}
-  if(PROMO_INFO){PROMO_OK=true;if(PROMO_INFO.kind==='card')try{localStorage.setItem('bs_card',PROMO)}catch(e){}}
-  else if(!net)try{if(localStorage.getItem('bs_card')===PROMO)localStorage.removeItem('bs_card')}catch(e){}
+  if(PROMO_INFO){PROMO_OK=true;try{localStorage.setItem(PROMO_INFO.kind==='card'?'bs_card':'bs_promo',PROMO)}catch(e){}markSub(PROMO_INFO.kind==='card'?'card':'promo')}
+  else if(!net)try{['bs_card','bs_promo'].forEach(k=>{if(localStorage.getItem(k)===PROMO)localStorage.removeItem(k)})}catch(e){}
   else PROMO_MSG=net?'Не удалось проверить промокод. Проверьте интернет и попробуйте ещё раз.':'Такого промокода нет в базе. Проверьте, пожалуйста, написание.';
   renderCart()}
 function renderCart(){
@@ -1130,7 +1138,7 @@ function renderCart(){
     return `<div class="line"><div class="t${(p.v||p.vid)?' hasv':''}"${(p.v||p.vid)?` data-v="${esc(p.sku)}"`:''}>${thumb(p)}${(p.v||p.vid)?`<button type="button" class="vbtn" data-v="${esc(p.sku)}"><i></i>Видео</button>`:''}</div>
       <div class="li"><button type="button" class="rmx" data-rm="${k}" aria-label="Убрать из корзины">×</button><b>${p.name}</b><small>${ruble(p.price)}</small>
         <div class="q"><button data-m="${k}" aria-label="Меньше">−</button><b>${cart[k]}</b><button data-p="${k}" aria-label="Больше">+</button></div>
-        <b class="lt">${ruble(p.price*cart[k])}</b></div></div>`}).join('')+`${info&&(info.type==='tiers')?ladderBar(tt):''}<div class="cardsave"${info?' style="display:none"':''}><div>💸 С картой клиента было бы дешевле на <b>${ruble(sv)}</b> (−${pc}%)</div>${ladderBar(tt)}<a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту за 10 секунд</a></div>`;
+        <b class="lt">${ruble(p.price*cart[k])}</b></div></div>`}).join('')+`${info&&(info.type==='tiers')?ladderBar(tt):''}<div class="cardsave cardpromo"${info?' style="display:none"':''}><div>💸 С картой клиента было бы дешевле на <b>${ruble(sv)}</b> (−${pc}%)</div>${ladderBar(tt)}<a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту за 10 секунд</a></div>`;
   $('cartBody').innerHTML=secHtml('items','Товары','',lines,OPEN.items);
   const promoBody=`<div class="promo"><div class="promo-row"><input class="f" id="fpromo" placeholder="Промокод или номер дисконтной карты" autocomplete="off" autocapitalize="characters" value="${esc(PROMO)}"><button type="button" id="promoApply" class="${info?'ok':''}">${info?'Принят ✓':'Применить'}</button></div>${PROMO_MSG?'<div class="promo-err">'+esc(PROMO_MSG)+'</div>':''}${short?'<div class="promo-min">Промокод '+esc(PROMO.toUpperCase())+' действует при заказе от '+ruble(PROMO_INFO.min)+'. Добавьте товаров ещё на '+ruble(PROMO_INFO.min-tt)+' — и скидка применится.</div>':''}</div>`;
   $('cartFoot').innerHTML=secHtml('promo','Промокод','',promoBody,OPEN.promo)+secHtml('totals','Итого','',`${info?`<div class="sum"><span>Итого</span><span>${ruble(tt)}</span></div><div class="sum dsum" style="color:#1F9D55"><span>Скидка по промокоду</span><span>−${ruble(dsc)} (${dpc}%)</span></div><div class="sum"><span>К оплате</span><span>${ruble(pay)}</span></div>`:`<div class="sum"><span>Итого</span><span>${ruble(tt)}</span></div>`}`,OPEN.totals)+
@@ -1304,7 +1312,7 @@ function render(){
 var TIERS=[[5000,5],[20000,10],[50000,15],[100000,20],[500000,25]];
 function discHtml(sum,pc,sv){var all=sum+(typeof total==='function'?total():0),nx=null;for(var i=0;i<TIERS.length;i++){if(all<TIERS[i][0]){nx=TIERS[i];break}}if(!nx&&all<500000)nx=[500000,30];
   var nxt=nx?'Добавьте товаров ещё на <b>'+ruble(nx[0]-all)+'</b> — скидка вырастет до <b>'+tierPc(nx[0])+'%</b>.':'У вас максимальная скидка — <b>30%</b>.';
-  return '<div class="kit-dsc"><div class="d1">💸 Цены со скидкой действуют с <b>виртуальной дисконтной картой</b>. Скидка от 5% до 30% зависит от суммы заказа.</div><div class="d2">'+nxt+'</div><a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту в Telegram</a><div class="d3">Откроется Telegram, и бот пришлёт вам виртуальную дисконтную карту.</div></div>'}
+  return '<div class="kit-dsc cardpromo"><div class="d1">💸 Цены со скидкой действуют с <b>виртуальной дисконтной картой</b>. Скидка от 5% до 30% зависит от суммы заказа.</div><div class="d2">'+nxt+'</div><a href="https://t.me/Salut38_bot?start=card" target="_blank" rel="noopener">Получить карту в Telegram</a><div class="d3">Откроется Telegram, и бот пришлёт вам виртуальную дисконтную карту.</div></div>'}
 function shown(){return !$k('kitRes').hidden}
 function reveal(id){var e=$k(id);if(!e||!e.hidden)return;e.hidden=false;setTimeout(function(){var r=e.getBoundingClientRect();if(r.bottom>window.innerHeight-20||r.top<60)e.scrollIntoView({behavior:'smooth',block:'center'})},60)}
 function resetKit(){['kS1','kS2','kS3','kS4'].forEach(function(i){$k(i).hidden=true});$k('kitStart').hidden=false;[].forEach.call(document.querySelectorAll('#kitOcc button,#kitShow button'),function(b){b.classList.remove('on')});$k('kitKids').checked=false;K.kids=false;K.occ='ny';K.show='long';$k('kitRange').value=380;upd()}
@@ -1338,7 +1346,7 @@ window.kitBuild=function(b,o,k,sw){K.budget=b;K.occ=o||'ny';K.show=sw||'long';K.
 function openVideo(sku){const p=BY.get(sku);if(!p||!(p.v||p.vid))return;document.getElementById('vframe').classList.remove('ended');
   document.getElementById('vtitle2').textContent=p.name;
   document.getElementById('vframe').innerHTML=p.vid?'<video src="'+esc(p.vid)+'" controls autoplay playsinline style="width:100%;height:100%;background:#000" onended="vEnd()"></video>':'<iframe src="https://rutube.ru/play/embed/'+encodeURIComponent(p.v)+'" allow="autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="Видео"></iframe>';
-  var base=(typeof total==='function'?total():0)+(cart[p.sku]?0:p.price),pc=tierPc(base),cp=withPc(p.price,pc);document.getElementById('vsave').innerHTML='<div class="vpr"><div><small>'+(p.shots>1?p.shots+' '+zalp(p.shots):'')+(p.cal?(p.shots>1?' · ':'')+'калибр '+esc(p.cal):'')+'</small><b>'+ruble(p.price)+'</b></div><div class="g"><small>'+(hasCard()?'по вашей карте':'с картой')+' −'+pc+'%</small><b>'+ruble(cp)+'</b></div></div>';VSKU=p.sku;vRefresh();document.getElementById('vmodal').classList.add('on')}
+  var base=(typeof total==='function'?total():0)+(cart[p.sku]?0:p.price),pc=tierPc(base),cp=withPc(p.price,pc);document.getElementById('vsave').innerHTML='<div class="vpr"><div><small>'+(p.shots>1?p.shots+' '+zalp(p.shots):'')+(p.cal?(p.shots>1?' · ':'')+'калибр '+esc(p.cal):'')+'</small><b>'+ruble(p.price)+'</b></div><div class="g cardprice"><small>'+(hasCard()?'по вашей карте':'с картой')+' −'+pc+'%</small><b>'+ruble(cp)+'</b></div></div>';VSKU=p.sku;vRefresh();document.getElementById('vmodal').classList.add('on')}
 var VSKU=null;
 function vRefresh(){var el=document.getElementById('vbuy');if(!el||!VSKU)return;var p=BY.get(VSKU);if(!p)return;var n=cart[VSKU]||0;
   el.innerHTML=n?'<div class="vq"><button type="button" data-vc="-1" aria-label="Меньше">−</button><b>'+n+'</b><button type="button" data-vc="1" aria-label="Больше">+</button></div><button type="button" class="vgo" data-vcart>Корзина · '+count()+'</button>':'<button type="button" class="vadd" data-vc="1">В корзину · '+new Intl.NumberFormat('ru-RU').format(p.price)+' ₽</button>'}
