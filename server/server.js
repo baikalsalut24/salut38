@@ -933,7 +933,7 @@ http.createServer({ requestTimeout: 0, headersTimeout: 60e3 }, async (req, res) 
     if (url.pathname.startsWith('/r/')) return await replPage(req, res, url);
     stat(req, res, url);
   } catch (e) { console.error(e); if (!res.headersSent) send(res, 500, { error: 'server' }) }
-}).listen(PORT, process.env.LISTEN_HOST || '127.0.0.1', () => { // только для nginx на этом же сервере, снаружи порт не виден console.log('Байкал Салют: сервер заказов на порту ' + PORT); const ownerOf = o => { // чей заказ (id в Telegram): по привязке статусов или по личной карте клиента
+}).listen(PORT, process.env.LISTEN_HOST || '127.0.0.1', () => { console.log('Байкал Салют: сервер заказов на порту ' + PORT); const ownerOf = o => { // чей заказ (id в Telegram): по привязке статусов или по личной карте клиента
     if (o.notify && o.notify.channel === 'telegram' && o.notify.chatId) return String(o.notify.chatId);
     const pr = o.promo ? findPromo(o.promo) : null; return pr && pr.owner && pr.owner.ch === 'telegram' ? String(pr.owner.id) : '';
   };
